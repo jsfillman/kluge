@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && \
     apt install --no-install-recommends -y \
     munge \
-    slurmd && \
+    slurmctld && \
     apt clean && rm -rf /var/lib/apt/lists/*
 
 # Create Munge-specific directories, user, and group, with appropriate permissions
@@ -27,7 +27,7 @@ RUN if ! getent group munge > /dev/null; then groupadd --system munge; fi && \
     fi
 
 # Copy entrypoint script
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY entrypoint-slurmctld.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Expose Slurmd port

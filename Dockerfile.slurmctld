@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+FROM ubuntu:24.10
+
+# Set environment variables to prevent interactive prompts during builds
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install necessary packages
+RUN apt update && \
+    apt install --no-install-recommends -y \
+ #   munge \
+    slurmctld && \
+ #   supervisor && \
+    apt clean && rm -rf /var/lib/apt/lists/*
+
+# Create Munge-specific directories, user, and group, with appropriate permissions
+#RUN if ! getent group munge > /dev/null; then groupadd --system munge; fi && \
+#    if ! id -u munge > /dev/null 2>&1; then \
+#        useradd --system --no-log-init --gid munge --home /var/lib/munge --shell /usr/sbin/#nologin munge; \
+#    fi && \
+#    mkdir -p /etc/munge /var/lib/munge /var/log/munge /run/munge && \
+#    chown -R munge:munge /etc/munge /var/lib/munge /var/log/munge /run/munge && \
+#    chmod 0700 /etc/munge /var/lib/munge /var/log/munge && \
+#    chmod a+x /run/munge && \
+#    if [ ! -f /etc/munge/munge.key ]; then \
+#        dd if=/dev/urandom bs=1024 count=1 > /etc/munge/munge.key && \
+#        chown munge:munge /etc/munge/munge.key && \
+#        chmod 0400 /etc/munge/munge.key; \
+#    fi
+#
+## Copy supervisord configuration
+#COPY supervisord.conf /etc/supervisor/supervisord.conf
+
+# Copy entrypoint script
+COPY entrypoint-slurmctld.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Expose Slurmctld port
+EXPOSE 6818/tcp
+
+# Set supervisord as the entrypoint
+# CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+ENTRYPOINT ["sleep", "infinity"]

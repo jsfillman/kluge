@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: slurmctld
+  namespace: jsfillman
+spec:
+  serviceName: slurmctld
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slurmctld
+  template:
+    metadata:
+      labels:
+        app: slurmctld
+    spec:
+      containers:
+        - name: slurmctld
+          image: jsfillman/slurmctld:kluge
+          securityContext:
+            runAsUser: 64030
+            runAsGroup: 64030
+            fsGroup: 64030 
+          ports:
+            - containerPort: 6817
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm
+              readOnly: true
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: slurm-config

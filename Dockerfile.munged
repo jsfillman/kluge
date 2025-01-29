@@ -1,0 +1,17 @@
+# Dockerfile.munge
+FROM ubuntu:24.10
+
+# Set non-interactive mode
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    munge && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Add entrypoint script
+COPY entrypoint-munged.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["sleep", "infinity"]

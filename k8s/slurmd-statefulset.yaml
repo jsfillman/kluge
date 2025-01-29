@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: slurmd
+  namespace: jsfillman
+spec:
+  serviceName: slurmd
+  replicas: 2
+  selector:
+    matchLabels:
+      app: slurmd
+  template:
+    metadata:
+      labels:
+        app: slurmd
+    spec:
+      containers:
+        - name: slurmd
+          image: jsfillman/slurmd:kluge
+          ports:
+            - containerPort: 6818
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: munge-key
+              mountPath: /etc/munge/munge.key
+              subPath: munge.key
+              readOnly: true
+            - name: slurm-config
+              mountPath: /etc/slurm/slurm.conf
+              subPath: slurm.conf
+      volumes:
+        - name: munge-key
+          secret:
+            secretName: munge-key
+        - name: slurm-config
+          configMap:
+            name: slurm-config

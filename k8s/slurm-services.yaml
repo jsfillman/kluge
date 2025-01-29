@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: slurmctld
+  namespace: jsfillman
+spec:
+  clusterIP: None
+  selector:
+    app: slurmctld
+  ports:
+    - port: 6817
+      targetPort: 6817
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slurmd
+  namespace: jsfillman
+spec:
+  clusterIP: None
+  selector:
+    app: slurmd
+  ports:
+    - port: 6818
+      targetPort: 6818
