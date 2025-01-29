@@ -1,3 +1,8 @@
 # Kluge
 
-![kluge-logo](./assets/kluge-logo.png){width="25%"}
+#### (Kubernetes-Linux Unified Grid Engine)
+
+![kluge-logo](./assets/kluge-logo-8122426.png)
+
+#### Overview
+
