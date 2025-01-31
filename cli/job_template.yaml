@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ job_name }}"
+  namespace: "jsfillman"  # Hardcoded for now
+spec:
+  completions: {{ nodes }}
+  parallelism: {{ nodes }}
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kluge-container
+          image: "{{ image }}"
+          command: ["/bin/bash", "-c"]
+          args:
+            - "{{ run_command | replace('job_output_', '/mnt/output/' + outdir + '/job_output_') }}"
+          resources:
+            requests:
+              cpu: "{{ cpus }}"
+              memory: "{{ mem }}"
+            limits:
+              cpu: "{{ cpus }}"
+              memory: "{{ mem }}"
+          volumeMounts:
+            - name: output-volume
+              mountPath: /mnt/output
+      volumes:
+        - name: output-volume
+          hostPath:
+            path: "/home/jsfillman/{{ outdir }}"  # Hardcoded user path
+            type: Directory

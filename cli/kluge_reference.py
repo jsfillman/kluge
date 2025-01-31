@@ -1,8 +1,66 @@
+import os
+import sys
+import curses
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.text import Text
 
+# Initialize the console and pager
 console = Console()
+
+def pager(text: str):
+    """Simulate a pager (like `less`) with arrow keys, space, and `q` to exit."""
+    
+    stdscr = curses.initscr()
+    curses.cbreak()
+    stdscr.keypad(True)
+    curses.noecho()
+    stdscr.clear()
+
+    # Set up color if terminal supports it
+    if curses.has_colors():
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+        curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
+
+    # Split the text into lines
+    lines = text.split("\n")
+    num_lines = len(lines)
+    current_line = 0
+    max_y, max_x = stdscr.getmaxyx()
+
+    while True:
+        # Print the content (with color applied)
+        for i in range(current_line, min(current_line + max_y - 1, num_lines)):
+            stdscr.addstr(i - current_line, 0, lines[i], curses.color_pair(2))
+        
+        # Refresh the screen
+        stdscr.refresh()
+
+        # Wait for key press
+        key = stdscr.getch()
+
+        # Arrow Up
+        if key == curses.KEY_UP or key == ord('k'):
+            if current_line > 0:
+                current_line -= 1
+
+        # Arrow Down
+        elif key == curses.KEY_DOWN or key == ord('j'):
+            if current_line < num_lines - max_y:
+                current_line += 1
+
+        # Space bar (scroll one page down)
+        elif key == ord(' '):
+            if current_line < num_lines - max_y:
+                current_line += max_y - 1
+
+        # Quit with 'q'
+        elif key == ord('q'):
+            break
+
+    # End curses mode
+    curses.endwin()
 
 # Title Panel
 title = Panel.fit(
@@ -27,89 +85,11 @@ quick_start = """
     [green]$ kluge batch --dry-run job.kb[/green]
 
   Watch a job’s real-time progress:
-    [cyan]$ kluge batch --watch my_job[/cyan]
+    [green]$ kluge batch --watch my_job[/green]
 """
 
-# Batch File Syntax Section
-syntax_example = """\
-[cyan]JOB[/cyan] my_first_job
-[cyan]CPUS[/cyan] 2
-[cyan]MEM[/cyan] 4Gi
-[cyan]NODES[/cyan] 1
-[cyan]IMAGE[/cyan] python:3.9-slim
+# The full reference manual text
+full_reference = f"{title}\n\n{quick_start}\n\nMore detailed info about Kluge Batch commands..."
 
-[cyan]RUN[/cyan] {
-  pip3 install --user pillow opencv-python-headless numpy
-  python3 script.py
-  echo "Job completed on $(hostname)"
-}
-"""
-
-syntax_panel = Panel.fit(
-    syntax_example,
-    title="📝 Batch File Example",
-    border_style="cyan",
-    padding=(1, 2),
-)
-
-# Available Commands Table
-commands_table = Table(
-    title="Available Commands",
-    show_lines=True,
-    title_style="bold cyan",
-    header_style="bold",
-    box=None,
-)
-
-commands_table.add_column("Category", justify="center", style="bold yellow")
-commands_table.add_column("Command", justify="left", style="green")
-commands_table.add_column("Description", justify="left")
-
-commands_table.add_row(
-    "🎯 Submission",
-    "[bold green]kluge batch job.kb[/bold green]",
-    "Run a batch job",
-)
-commands_table.add_row(
-    "🎯 Submission",
-    "[bold green]kluge batch --new[/bold green]",
-    "Start interactive batch creation",
-)
-commands_table.add_row(
-    "🎯 Submission",
-    "[bold green]kluge batch --dry-run job.kb[/bold green]",
-    "Validate batch file",
-)
-commands_table.add_row(
-    "📊 Monitoring",
-    "[bold cyan]kluge batch --watch my_job[/bold cyan]",
-    "Watch job progress",
-)
-commands_table.add_row(
-    "📊 Monitoring",
-    "[bold cyan]kluge batch --logs my_job[/bold cyan]",
-    "View job logs",
-)
-commands_table.add_row(
-    "📊 Monitoring",
-    "[bold cyan]kluge batch --cancel my_job[/bold cyan]",
-    "Cancel a running job",
-)
-commands_table.add_row(
-    "📚 Help",
-    "[bold yellow]kluge batch --help[/bold yellow]",
-    "Show command-line help",
-)
-commands_table.add_row(
-    "📚 Help",
-    "[bold yellow]kluge batch --reference[/bold yellow]",
-    "Show this reference manual",
-)
-
-# Print Everything to Pager (Scroll with 'j/k', Exit with 'q')
-with console.pager():
-    console.print(title)
-    console.print(quick_start)
-    console.print(syntax_panel)
-    console.print(commands_table)
-
+# Call the pager function to start displaying content
+pager(full_reference)

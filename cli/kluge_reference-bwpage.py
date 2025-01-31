@@ -1,7 +1,10 @@
+import os
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.text import Text
+
+# Ensure ANSI colors are respected in less
+os.environ["LESS"] = "-R"
 
 console = Console()
 
@@ -107,8 +110,9 @@ commands_table.add_row(
     "Show this reference manual",
 )
 
-# Print Everything to Console
-console.print(title)
-console.print(quick_start)
-console.print(syntax_panel)
-console.print(commands_table)
+# Print Everything to Pager (Scroll with 'j/k', Exit with 'q')
+with console.pager():
+    console.print(title)
+    console.print(quick_start)
+    console.print(syntax_panel)
+    console.print(commands_table)
