@@ -14,28 +14,35 @@ spec:
       labels:
         app: slurmd
     spec:
+      securityContext:
+        runAsUser: 64030
+        runAsGroup: 64030
+        fsGroup: 64030
       containers:
         - name: slurmd
-          image: jsfillman/slurmd:kluge
+          image: jsfillman/slurmd:slinky
+          command: ["sleep", "infinity"]
+          securityContext:
+            runAsUser: 64030
+            runAsGroup: 64030
           ports:
-            - containerPort: 6818
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+            - containerPort: 7003
           volumeMounts:
-            - name: munge-key
-              mountPath: /etc/munge/munge.key
-              subPath: munge.key
-              readOnly: true
             - name: slurm-config
               mountPath: /etc/slurm/slurm.conf
               subPath: slurm.conf
+            - name: slurm-config
+              mountPath: /etc/slurm/cgroup.conf
+              subPath: cgroup.conf
+            - name: slurmd-spool
+              mountPath: /var/spool/slurmd
+            - name: slurmd-logs
+              mountPath: /var/log/slurm
       volumes:
-        - name: munge-key
-          secret:
-            secretName: munge-key
         - name: slurm-config
           configMap:
             name: slurm-config
+        - name: slurmd-spool
+          emptyDir: {}
+        - name: slurmd-logs
+          emptyDir: {}

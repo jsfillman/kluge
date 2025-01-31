@@ -1,5 +1,5 @@
 # Dockerfile.munge
-FROM ubuntu:24.10
+FROM debian:testing-slim
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive

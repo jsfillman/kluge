@@ -5,20 +5,45 @@ metadata:
   namespace: jsfillman
 data:
   slurm.conf: |
-    ClusterName=slurm-cluster
-    SlurmctldHost=slurmctld-0
-    SlurmUser=slurm
-    SlurmdUser=slurm
-    SlurmdSpoolDir=/tmp/slurmd
-    StateSaveLocation=/tmp/slurmctld
+    AccountingStorageEnforce=associations,limits,qos
+    AccountingStorageHost=slurm-influxdb
+    AccountingStoragePass=slurm
+    AccountingStoragePort=8086
+    AccountingStorageType=accounting_storage/influxdb
+    AccountingStorageUser=slurm
     AuthType=none
+    ClusterName=slurm-cluster
     CryptoType=none
+    JobAcctGatherFrequency=30
+    JobAcctGatherType=jobacct_gather/cgroup
+    LaunchParameters=enable_nss_slurm
     MailProg=/bin/true
-    SlurmctldLogFile=/tmp/slurm/slurmctld.log
-    SlurmctldDebug=info
-    SlurmdLogFile=/tmp/slurm/slurmd.log
-    SlurmdDebug=info
-    SlurmctldPort=6817
-    SlurmdPort=6818
-    NodeName=slurmd-[0-3] CPUs=4 State=UNKNOWN
+    NodeName=slurmd-[0-1] CPUs=1 CoresPerSocket=1 ThreadsPerCore=1 State=UNKNOWN
     PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+    ProctrackType=proctrack/cgroup
+    PrologFlags=Alloc
+    SchedulerType=sched/backfill
+    SelectType=select/cons_tres
+    SelectTypeParameters=CR_Core_Memory
+    SlurmctldDebug=info
+    SlurmctldHost=slurmctld-0
+    SlurmctldLogFile=/var/log/slurm/slurmctld.log
+    SlurmctldPort=7002
+    SlurmdDebug=info
+    SlurmdLogFile=/var/log/slurm/slurmd.log
+    SlurmdParameters=usecgroupv2,ConfigOverride
+    SlurmdPort=7003
+    SlurmdSpoolDir=/var/spool/slurmd
+    SlurmdUser=slurm
+    SlurmUser=slurm
+    StateSaveLocation=/var/spool
+    TaskPlugin=task/cgroup
+  cgroup.conf: |
+    CgroupMountpoint=/sys/fs/cgroup
+    ConstrainCores=yes
+    ConstrainRAMSpace=yes
+    ConstrainDevices=yes
+    ConstrainSwapSpace=yes
+    AllowedSwapSpace=0
+    AllowedRAMSpace=100
+    MinRAMSpace=30

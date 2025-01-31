@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kluge-batch-job
+spec:
+  completions: 2
+  parallelism: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kluge-container
+          image: ubuntu:latest  # Change to your actual image
+          command: ["/bin/bash", "-c"]
+          args:
+            - "echo Job completed on $(hostname) >> /mnt/output/job_output.txt"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+          volumeMounts:
+            - name: output-volume
+              mountPath: /mnt/output
+      volumes:
+        - name: output-volume
+          hostPath:
+            path: /Users/jsfillman/
+            type: Directory

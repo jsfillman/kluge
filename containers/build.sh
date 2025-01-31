@@ -3,7 +3,7 @@ set -e
 
 # Define variables
 DOCKERHUB_USERNAME="jsfillman"  # Replace with your Docker Hub username
-PLATFORMS="linux/amd64,linux/arm64,linux/riscv64,linux/ppc64le,linux/s390x"
+PLATFORMS="linux/386,linux/amd64,linux/arm64/v8,linux/riscv64,linux/ppc64le,linux/s390x"
 VERSION="24.05"  # Update this to match the Slurm version you're building
 DOCKERFILES=("slurmctld" "slurmd" "munged")  # Add more Dockerfile names if needed
 
@@ -26,4 +26,3 @@ for TARGET in "${DOCKERFILES[@]}"; do
 done
 
 echo "All images built and pushed successfully!"
-

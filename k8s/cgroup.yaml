@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cgroup-config
+  namespace: jsfillman
+data:
+  cgroup.conf: |
+    AllowedDevicesFile=""
+    AllowedRAMSpace=100
+    AllowedSwapSpace=100
+    CgroupAutomount=no
+    ConstrainCores=no
+    ConstrainDevices=no
+    ConstrainKmemSpace=no
+    ConstrainRAMSpace=no
+    ConstrainSwapSpace=no
+    TaskAffinity=no
+    TaskPlugin=task/none
