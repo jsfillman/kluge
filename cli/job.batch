@@ -1,0 +1,14 @@
+NAME sammich
+CPU 1
+RAM 1Gi
+IMAGE pramanan3/mpi_tutorial_base
+WORKDIR workspace
+OUTDIR workspace
+
+ENV {
+OMPI_MCA_btl=tcp,self,sm
+OMPI_ALLOW_RUN_AS_ROOT=1
+OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+}
+
+RUN mpirun -n 2 hostname

@@ -1,0 +1,48 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: 
+  namespace: jsfillman
+spec:
+  minAvailable: 1
+  schedulerName: volcano
+  policies:
+    - event: TaskCompleted
+      action: CompleteJob
+  tasks:
+    - name: mpi-task
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            app: mpi
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: mpi-container
+              image: pramanan3/mpi_tutorial_base
+              command: ["mpirun", "-n", "2", "hostname"]
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "1Gi"
+                limits:
+                  cpu: "4"
+                  memory: "8Gi"
+              env:
+                
+                - name: OMPI_MCA_btl
+                  value: "tcp,self,sm"
+                
+                - name: OMPI_ALLOW_RUN_AS_ROOT
+                  value: "1"
+                
+                - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
+                  value: "1"
+                
+              volumeMounts:
+                - mountPath: /workspace
+                  name: shared-storage
+          volumes:
+            - name: shared-storage
+              emptyDir: {}

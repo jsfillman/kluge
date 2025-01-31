@@ -1,0 +1,42 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  name: {{ name }}
+  namespace: jsfillman
+spec:
+  minAvailable: 1
+  schedulerName: volcano
+  policies:
+    - event: TaskCompleted
+      action: CompleteJob
+  tasks:
+    - name: mpi-task
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            app: mpi
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: mpi-container
+              image: {{ image }}
+              command: {{ command | tojson }}
+              resources:
+                requests:
+                  cpu: "{{ cpu }}"
+                  memory: "{{ ram }}"
+                limits:
+                  cpu: "4"
+                  memory: "8Gi"
+              env:
+                {% for key, value in env.items() %}
+                - name: {{ key }}
+                  value: "{{ value }}"
+                {% endfor %}
+              volumeMounts:
+                - mountPath: /{{ workdir }}
+                  name: shared-storage
+          volumes:
+            - name: shared-storage
+              emptyDir: {}
