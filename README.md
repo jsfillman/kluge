@@ -32,8 +32,8 @@
 
 2️⃣ **Clone the repo & deploy Kluge**:  
    ```bash
-   git clone https://github.com/YOUR_GITHUB/Kluge.git
-   cd Kluge
+   git clone https://github.com/jsfillman/kluge.git
+   cd kluge
    helm install kluge ./helm/kluge --namespace $USER
    ```
 
@@ -47,10 +47,10 @@
 ## 🛠️ Usage
 
 ### 🏗️ Submitting a Batch Job
-Submit a job using the `kludge` CLI:
+Submit a job using the `kluge` CLI:
 
 ```bash
-kludge batch myjob.sbatch
+kluge batch myjob.sbatch
 ```
 
 Example `myjob.sbatch`:
@@ -69,13 +69,13 @@ sleep 60
 View running jobs:
 
 ```bash
-kludge queue
+kluge queue
 ```
 
 Cancel a job:
 
 ```bash
-kludge cancel <job_id>
+kluge cancel <job_id>
 ```
 
 ---
