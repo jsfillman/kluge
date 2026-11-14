@@ -2,6 +2,140 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct SbatchError {
+    pub line: usize,
+    pub text: String,
+}
+
+pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
+    let mut spec = Spec {
+        run: Vec::new(),
+        on: None,
+        across: 1,
+        duration: None,
+        image: None,
+        name: None,
+        into: None,
+        with: Vec::new(),
+        team: None,
+        dir: None,
+        cpus: None,
+        memory: None,
+        overrides: Vec::new(),
+    };
+    let mut body = Vec::new();
+    let mut in_body = false;
+    for (index, raw) in text.lines().enumerate() {
+        let line = index + 1;
+        let trimmed = raw.trim();
+        if !in_body {
+            if trimmed.is_empty() || trimmed.starts_with("#!") {
+                continue;
+            }
+            if let Some(directive) = trimmed.strip_prefix("#SBATCH") {
+                apply_sbatch(&mut spec, line, directive.trim())?;
+                continue;
+            }
+            if trimmed.starts_with('#') {
+                continue;
+            }
+            in_body = true;
+        }
+        body.push(raw);
+    }
+    spec.run = body
+        .join("\n")
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
+    if spec.run.is_empty() {
+        spec.run.clear();
+    }
+    Ok(spec)
+}
+
+fn apply_sbatch(spec: &mut Spec, line: usize, directive: &str) -> Result<(), SbatchError> {
+    let reject = || SbatchError {
+        line,
+        text: format!("#SBATCH {directive}"),
+    };
+    let (flag, value) = split_sbatch_flag(directive).ok_or_else(reject)?;
+    match flag.as_str() {
+        "--job-name" => spec.name = Some(value),
+        "--nodes" => {
+            spec.across = value.parse().map_err(|_| reject())?;
+        }
+        "--gpus" | "--gpus-per-node" => {
+            spec.on = Some(parse_gpu_request(&value).map_err(|_| reject())?);
+        }
+        "--gres" => {
+            let rest = value.strip_prefix("gpu:").ok_or_else(reject)?;
+            spec.on = Some(parse_gpu_request(rest).map_err(|_| reject())?);
+        }
+        "--cpus-per-task" => spec.cpus = Some(value),
+        "--mem" => spec.memory = Some(value),
+        "--time" => spec.duration = Some(parse_slurm_time(&value).map_err(|_| reject())?),
+        "--account" => spec.team = Some(value),
+        "--output" => spec.into = Some(value),
+        _ => return Err(reject()),
+    }
+    Ok(())
+}
+
+fn split_sbatch_flag(directive: &str) -> Option<(String, String)> {
+    let directive = directive.trim();
+    if !directive.starts_with("--") {
+        return None;
+    }
+    if let Some((flag, value)) = directive.split_once('=') {
+        Some((flag.to_string(), value.trim().to_string()))
+    } else if let Some((flag, value)) = directive.split_once(char::is_whitespace) {
+        Some((flag.to_string(), value.trim().to_string()))
+    } else {
+        None
+    }
+}
+
+fn parse_gpu_request(value: &str) -> Result<GpuShape, ()> {
+    let parts: Vec<&str> = value.split(':').collect();
+    match parts.as_slice() {
+        [count] => Ok(GpuShape {
+            count: count.parse().map_err(|_| ())?,
+            kind: String::new(),
+        }),
+        [kind, count] => Ok(GpuShape {
+            count: count.parse().map_err(|_| ())?,
+            kind: (*kind).to_string(),
+        }),
+        _ => Err(()),
+    }
+}
+
+fn parse_slurm_time(value: &str) -> Result<std::time::Duration, ()> {
+    let (days, clock) = match value.split_once('-') {
+        Some((days, clock)) => (days.parse::<u64>().map_err(|_| ())?, clock),
+        None => (0, value),
+    };
+    let parts: Vec<&str> = clock.split(':').collect();
+    let seconds = match parts.as_slice() {
+        [minutes] => minutes.parse::<u64>().map_err(|_| ())? * 60,
+        [minutes, seconds] => {
+            minutes.parse::<u64>().map_err(|_| ())? * 60
+                + seconds.parse::<u64>().map_err(|_| ())?
+        }
+        [hours, minutes, seconds] => {
+            hours.parse::<u64>().map_err(|_| ())? * 3600
+                + minutes.parse::<u64>().map_err(|_| ())? * 60
+                + seconds.parse::<u64>().map_err(|_| ())?
+        }
+        _ => return Err(()),
+    };
+    Ok(std::time::Duration::from_secs(
+        days * 24 * 60 * 60 + seconds,
+    ))
+}
+
 pub fn render_sentence(spec: &Spec) -> String {
     let mut lines = Vec::new();
     if !spec.run.is_empty() {
@@ -85,6 +219,8 @@ pub struct Spec {
     pub with: Vec<(String, String)>,
     pub team: Option<String>,
     pub dir: Option<String>,
+    pub cpus: Option<String>,
+    pub memory: Option<String>,
     pub overrides: Vec<OverrideNote>,
 }
 
@@ -110,6 +246,8 @@ pub fn resolve(
         with: Vec::new(),
         team: None,
         dir: None,
+        cpus: None,
+        memory: None,
         overrides: Vec::new(),
     };
     let mut origin: Vec<(&'static str, Layer)> = Vec::new();
