@@ -12,7 +12,9 @@ kluge run train.py on 8 h100 across 4 for 6 hours into results
 
 The systems team installs one chart and taints a pool of GPU nodes. Researchers never write a manifest. Slurm and Slinky can keep running on the other nodes. The name is a joke, in the same spirit as `git`.
 
-The design is in [docs/spec](docs/spec/README.md). This repository still contains the early sketches (container builds, static manifests, a prototype submitter, a desktop mock). Those files are not the system described here.
+The design is in [docs/spec](docs/spec/README.md). The build order is the [ticket board](docs/tickets/README.md). Agents follow [AGENTS.md](AGENTS.md): one ticket at a time, a failing test before the code, and a proof another person can re-run.
+
+This repository still contains the early sketches (container builds, static manifests, a prototype submitter, a desktop mock). Those files are not the system described here.
 
 ## For researchers
 

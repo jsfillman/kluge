@@ -27,6 +27,10 @@ Slinky, or any other Slurm-on-Kubernetes install, can keep the rest of the clust
 - **A desktop UI before the CLI.** The PyQt window in `gui/` is a mock with hardcoded numbers. A menu-bar app comes after submit, logs, and declared output sync work in the CLI.
 - **Invisible sync of the whole filesystem.** Later, and only for paths the run declares as outputs. Checkpoints stay on the cluster filesystem.
 
+## Language
+
+Rust, in one Cargo workspace. `kluge-check` holds the grammar and the checks. `kluge-cli` is the binary. `kluge-controller` is the webhook and the reconciler. The check functions are shared so the CLI and the controller cannot drift. Go is not used unless a later ticket has to extend Kueue itself. The Python files under `cli/` stay historical.
+
 ## Current scope
 
 1. Install onto an existing cluster in a way an infra team will accept: one chart, a tainted pool, Slinky untouched.

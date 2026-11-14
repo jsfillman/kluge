@@ -92,7 +92,7 @@ The controller knows the pool. It repeats anything that must hold even if the cl
 
 **Identity.** The caller is authenticated. `team` is one they are allowed to charge. The `Run` is created as that user.
 
-**Ceilings.** `for` is at most the team's wall-time limit. `on` does not exceed the GPUs on one machine of that type. `across` times that count does not exceed the team's quota or the number of machines of that type in the reserved pool. `name` matches `^[a-z][a-z0-9-]{0,62}$`.
+**Ceilings.** `for` is at most the team's wall-time limit (`time.ceiling`). `on` does not exceed the GPUs on one machine of that type. `across` times that count does not exceed the team's quota or the number of machines of that type in the reserved pool (`pool.capacity`). `name` matches `^[a-z][a-z0-9-]{0,62}$`.
 
 **Machines.** The GPU type exists on the reserved pool. The count matches a real machine. Enough healthy nodes exist for an eventual admit. Health here means the node is untainted except for the Kluge taint, is not cordoned, and reports the GPUs as allocatable. A shortfall against free nodes is a note. A shortfall against existing nodes is `pool.shape` or `pool.capacity`.
 
@@ -113,7 +113,8 @@ The controller knows the pool. It repeats anything that must hold even if the cl
 | `parse.duration` | `for` did not parse |
 | `parse.sbatch` | A `#SBATCH` directive has no translation |
 | `pool.shape` | No machine has this GPU shape |
-| `pool.capacity` | Shape is real and larger than the pool or the quota |
+| `pool.capacity` | Shape is real and larger than the pool or the GPU quota |
+| `time.ceiling` | `for` parses and exceeds the team's wall-time limit |
 | `pool.type` | GPU type is not on the reserved pool |
 | `name.taken` | A live run already has this name |
 | `name.syntax` | Name does not match the pattern |
