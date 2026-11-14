@@ -10,7 +10,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E1-T1](E1-T1.md) | done | E0-T1 | Prefix matching |
 | [E1-T2](E1-T2.md) | done | E1-T1 | `on`, `for`, and `with` values |
 | [E1-T3](E1-T3.md) | done | E1-T2 | Files and the `Klugefile` |
-| [E1-T4](E1-T4.md) | open | E1-T3 | Three layers |
+| [E1-T4](E1-T4.md) | done | E1-T3 | Three layers |
 | [E1-T5](E1-T5.md) | open | E1-T4 | Resolved sentence |
 | [E1-T6](E1-T6.md) | open | E1-T5 | `#SBATCH` reader |
 | [E2-T1](E2-T1.md) | open | E1-T1 | Diagnostic JSON |

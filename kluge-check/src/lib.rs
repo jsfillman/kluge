@@ -2,6 +2,117 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layer {
+    Klugefile,
+    File,
+    Cli,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct OverrideNote {
+    pub phrase: &'static str,
+    pub from: Layer,
+    pub to: Layer,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Spec {
+    pub run: Vec<String>,
+    pub on: Option<GpuShape>,
+    pub across: u32,
+    pub duration: Option<std::time::Duration>,
+    pub image: Option<String>,
+    pub name: Option<String>,
+    pub into: Option<String>,
+    pub with: Vec<(String, String)>,
+    pub team: Option<String>,
+    pub dir: Option<String>,
+    pub overrides: Vec<OverrideNote>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ResolveError {
+    MissingRun,
+    Value { phrase: &'static str },
+}
+
+pub fn resolve(
+    klugefile: &[Phrase],
+    file: &[Phrase],
+    cli: &[Phrase],
+) -> Result<Spec, ResolveError> {
+    let mut spec = Spec {
+        run: Vec::new(),
+        on: None,
+        across: 1,
+        duration: None,
+        image: None,
+        name: None,
+        into: None,
+        with: Vec::new(),
+        team: None,
+        dir: None,
+        overrides: Vec::new(),
+    };
+    let mut origin: Vec<(&'static str, Layer)> = Vec::new();
+    apply(&mut spec, &mut origin, klugefile, Layer::Klugefile)?;
+    apply(&mut spec, &mut origin, file, Layer::File)?;
+    apply(&mut spec, &mut origin, cli, Layer::Cli)?;
+    if spec.run.is_empty() {
+        return Err(ResolveError::MissingRun);
+    }
+    Ok(spec)
+}
+
+fn apply(
+    spec: &mut Spec,
+    origin: &mut Vec<(&'static str, Layer)>,
+    phrases: &[Phrase],
+    layer: Layer,
+) -> Result<(), ResolveError> {
+    for phrase in phrases {
+        if let Some((_, from)) = origin.iter().find(|(name, _)| *name == phrase.name) {
+            if *from != layer {
+                spec.overrides.push(OverrideNote {
+                    phrase: phrase.name,
+                    from: *from,
+                    to: layer,
+                });
+            }
+        }
+        if let Some(slot) = origin.iter_mut().find(|(name, _)| *name == phrase.name) {
+            slot.1 = layer;
+        } else {
+            origin.push((phrase.name, layer));
+        }
+        set_phrase(spec, phrase)?;
+    }
+    Ok(())
+}
+
+fn set_phrase(spec: &mut Spec, phrase: &Phrase) -> Result<(), ResolveError> {
+    let bad = || ResolveError::Value {
+        phrase: phrase.name,
+    };
+    match phrase.name {
+        "run" => {
+            spec.run = phrase.value.split_whitespace().map(str::to_string).collect();
+        }
+        "on" => spec.on = Some(parse_on(&phrase.value).map_err(|_| bad())?),
+        "across" => spec.across = parse_across(&phrase.value).map_err(|_| bad())?,
+        "for" => spec.duration = Some(parse_for(&phrase.value).map_err(|_| bad())?),
+        "use" => spec.image = Some(phrase.value.clone()),
+        "name" => spec.name = Some(phrase.value.clone()),
+        "into" => spec.into = Some(phrase.value.clone()),
+        "with" => spec.with = vec![parse_with(&phrase.value).map_err(|_| bad())?],
+        "team" => spec.team = Some(phrase.value.clone()),
+        "dir" => spec.dir = Some(phrase.value.clone()),
+        _ => {}
+    }
+    Ok(())
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Phrase {
     pub line: usize,
