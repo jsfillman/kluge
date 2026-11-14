@@ -3,6 +3,61 @@ pub fn crate_name() -> &'static str {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Phrase {
+    pub line: usize,
+    pub name: &'static str,
+    pub value: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LexError {
+    Unknown { line: usize, token: String },
+    Ambiguous { line: usize, names: Vec<&'static str> },
+    Duplicate {
+        phrase: &'static str,
+        first_line: usize,
+        second_line: usize,
+    },
+}
+
+pub fn lex(text: &str) -> Result<Vec<Phrase>, LexError> {
+    let mut phrases = Vec::new();
+    let mut seen: Vec<(&'static str, usize)> = Vec::new();
+    for (index, raw) in text.lines().enumerate() {
+        let line = index + 1;
+        let code = raw.split('#').next().unwrap_or("").trim();
+        if code.is_empty() {
+            continue;
+        }
+        let (token, value) = code.split_once(char::is_whitespace).unwrap_or((code, ""));
+        let name = match match_phrase(token) {
+            Match::One(name) => name,
+            Match::None => {
+                return Err(LexError::Unknown {
+                    line,
+                    token: token.to_string(),
+                })
+            }
+            Match::Ambiguous(names) => return Err(LexError::Ambiguous { line, names }),
+        };
+        if let Some((_, first_line)) = seen.iter().find(|(seen_name, _)| *seen_name == name) {
+            return Err(LexError::Duplicate {
+                phrase: name,
+                first_line: *first_line,
+                second_line: line,
+            });
+        }
+        seen.push((name, line));
+        phrases.push(Phrase {
+            line,
+            name,
+            value: value.trim().to_string(),
+        });
+    }
+    Ok(phrases)
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct GpuShape {
     pub count: u32,
     pub kind: String,
