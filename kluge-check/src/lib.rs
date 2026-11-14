@@ -2,6 +2,63 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+pub fn render_sentence(spec: &Spec) -> String {
+    let mut lines = Vec::new();
+    if !spec.run.is_empty() {
+        lines.push(format!("run {}", spec.run.join(" ")));
+    }
+    if let Some(on) = &spec.on {
+        if on.count == 1 {
+            lines.push(format!("on {}", on.kind));
+        } else {
+            lines.push(format!("on {} {}", on.count, on.kind));
+        }
+    }
+    lines.push(format!("across {}", spec.across));
+    if let Some(duration) = spec.duration {
+        lines.push(format!("for {}", format_duration(duration)));
+    }
+    if let Some(image) = &spec.image {
+        lines.push(format!("use {image}"));
+    }
+    if let Some(name) = &spec.name {
+        lines.push(format!("name {name}"));
+    }
+    if let Some(into) = &spec.into {
+        lines.push(format!("into {into}"));
+    }
+    for (key, value) in &spec.with {
+        lines.push(format!("with {key}={value}"));
+    }
+    if let Some(team) = &spec.team {
+        lines.push(format!("team {team}"));
+    }
+    if let Some(dir) = &spec.dir {
+        lines.push(format!("dir {dir}"));
+    }
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+fn format_duration(duration: std::time::Duration) -> String {
+    let seconds = duration.as_secs();
+    if seconds % 3600 == 0 {
+        let hours = seconds / 3600;
+        if hours == 1 {
+            "1 hour".to_string()
+        } else {
+            format!("{hours} hours")
+        }
+    } else {
+        let minutes = seconds / 60;
+        if minutes == 1 {
+            "1 minute".to_string()
+        } else {
+            format!("{minutes} minutes")
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layer {
     Klugefile,
