@@ -2,6 +2,98 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Diagnostic {
+    pub code: Code,
+    pub severity: Severity,
+    pub message: String,
+    pub span: Span,
+    pub notes: Vec<String>,
+    pub suggestions: Vec<Suggestion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Code {
+    #[serde(rename = "parse.unknown")]
+    ParseUnknown,
+    #[serde(rename = "parse.ambiguous")]
+    ParseAmbiguous,
+    #[serde(rename = "parse.duplicate")]
+    ParseDuplicate,
+    #[serde(rename = "parse.run")]
+    ParseRun,
+    #[serde(rename = "parse.duration")]
+    ParseDuration,
+    #[serde(rename = "parse.sbatch")]
+    ParseSbatch,
+    #[serde(rename = "pool.shape")]
+    PoolShape,
+    #[serde(rename = "pool.capacity")]
+    PoolCapacity,
+    #[serde(rename = "time.ceiling")]
+    TimeCeiling,
+    #[serde(rename = "pool.type")]
+    PoolType,
+    #[serde(rename = "name.taken")]
+    NameTaken,
+    #[serde(rename = "name.syntax")]
+    NameSyntax,
+    #[serde(rename = "path.escape")]
+    PathEscape,
+    #[serde(rename = "path.missing")]
+    PathMissing,
+    #[serde(rename = "image.denied")]
+    ImageDenied,
+    #[serde(rename = "image.pull")]
+    ImagePull,
+    #[serde(rename = "auth.team")]
+    AuthTeam,
+    #[serde(rename = "auth.identity")]
+    AuthIdentity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Span {
+    pub file: String,
+    pub line: usize,
+    pub column: usize,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Suggestion {
+    pub auto: bool,
+    pub replacement: String,
+    pub command: String,
+}
+
+pub fn sample_pool_shape() -> Diagnostic {
+    Diagnostic {
+        code: Code::PoolShape,
+        severity: Severity::Error,
+        message: "each reserved node has 8 h100".to_string(),
+        span: Span {
+            file: "ablation.kluge".to_string(),
+            line: 2,
+            column: 4,
+            text: "on 32 h100".to_string(),
+        },
+        notes: vec!["32 GPUs is 4 machines of 8".to_string()],
+        suggestions: vec![Suggestion {
+            auto: true,
+            replacement: "on 8 h100\nacross 4".to_string(),
+            command: "kluge run train.py on 8 h100 across 4".to_string(),
+        }],
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct SbatchError {
     pub line: usize,
