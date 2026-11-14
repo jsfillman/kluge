@@ -1,0 +1,12 @@
+{
+  "code": "pool.shape",
+  "severity": "error",
+  "message": "each reserved node has 8 h100",
+  "span": {"file": "ablation.kluge", "line": 2, "column": 4, "text": "on 32 h100"},
+  "notes": ["32 GPUs is 4 machines of 8"],
+  "suggestions": [{
+    "auto": true,
+    "replacement": "on 8 h100\nacross 4",
+    "command": "kluge run train.py on 8 h100 across 4"
+  }]
+}

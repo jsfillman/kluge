@@ -1,112 +1,51 @@
 # Kluge
 
-#### (Kubernetes-Linux Unified Grid Engine)
-
 <p align="center">
-  <img src="./assets/kluge-logo-8122426.png" alt="Kluge Logo" width="300">
+  <img src="./assets/kluge-logo-8122426.png" alt="Kluge" width="240">
 </p>
 
----
-
-## 🚀 Overview
-
-**Kluge** is a **modern, ephemeral Slurm-on-Kubernetes** framework designed for **batch job execution** with seamless `sbatch` compatibility. It dynamically provisions isolated Slurm clusters per user, optimizing cloud and bare-metal resources for **HPC workloads**.
-
-## 🎯 Features
-
-✅ **Ephemeral Slurm Clusters** - Each user gets an isolated Slurm instance, spun up on demand.  
-✅ **Kubernetes Native** - Deploys via Helm, scales with Kubernetes.  
-✅ **Automatic Resource Allocation** - Creates `slurmd` nodes dynamically based on job specs.  
-✅ **Cloud & Bare-Metal Ready** - Works across Kubernetes-managed clusters, from cloud to on-prem.  
-✅ **Native `sbatch` Support** - Submit jobs without modifying existing scripts.  
-✅ **Persistent Storage (Optional)** - Mounts `/home/$USER` for easy result retrieval.  
-
----
-
-## 📦 Installation
-
-1️⃣ **Install Helm** (if not already installed):  
-   ```bash
-   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-   ```
-
-2️⃣ **Clone the repo & deploy Kluge**:  
-   ```bash
-   git clone https://github.com/jsfillman/kluge.git
-   cd kluge
-   helm install kluge ./helm/kluge --namespace $USER
-   ```
-
-3️⃣ **Verify deployment**:  
-   ```bash
-   kubectl get pods -n $USER
-   ```
-
----
-
-## 🛠️ Usage
-
-### 🏗️ Submitting a Batch Job
-Submit a job using the `kluge` CLI:
+A researcher-facing way to run GPU jobs on a Kubernetes cluster that already exists.
 
 ```bash
-kluge batch myjob.sbatch
+kluge run train.py on 8 h100 across 4 for 6 hours into results
 ```
 
-Example `myjob.sbatch`:
-```bash
-#!/bin/bash
-#SBATCH --job-name=test_job
-#SBATCH --nodes=2
-#SBATCH --time=00:10:00
-#SBATCH --output=output.log
+The systems team installs one chart and taints a pool of GPU nodes. Researchers never write a manifest. Slurm and Slinky can keep running on the other nodes. The name is a joke, in the same spirit as `git`.
 
-echo "Running on $(hostname)"
-sleep 60
+The design is in [docs/spec](docs/spec/README.md). The build order is the [ticket board](docs/tickets/README.md). Agents follow [AGENTS.md](AGENTS.md): one ticket at a time, a failing test before the code, and a proof another person can re-run.
+
+This repository still contains the early sketches (container builds, static manifests, a prototype submitter, a desktop mock). Those files are not the system described here.
+
+## For researchers
+
+A run is one sentence. The same words are a command, a `*.kluge` file, or the defaults in a `Klugefile`. Each word has a unique first letter, so `kluge r train.py o 8 h100 a 4 f 6h` is the same command. Closing the terminal does not stop the job.
+
+```text
+kluge run train.py on 8 h100 across 4 for 6 hours
+kluge status
+kluge logs ablation
+kluge cancel ablation
+kluge watch
 ```
 
-### 📜 Monitoring Jobs
-View running jobs:
+An existing `#SBATCH` script is a reader input: `kluge run job.sbatch` translates the headers it understands and refuses the rest with the line quoted.
 
-```bash
-kluge queue
-```
+## For the cluster
 
-Cancel a job:
-
-```bash
-kluge cancel <job_id>
-```
-
----
-
-## 🔧 Development
-
-### 🔹 Deploy Locally
-Run in minikube or kind:
+Kluge is a namespace, a queue, and a controller on stock Kubernetes. The reserved nodes carry a taint that only Kluge's service account tolerates. Slinky does not schedule there. Researchers cannot create Pods directly, so the checks cannot be skipped with `kubectl`.
 
 ```bash
-helm install kluge ./helm/kluge --set local=true
+helm install kluge ./deploy/kluge
 ```
 
-### 🔹 Debugging
-Check logs for the controller:
+The chart is part of the design, not of this tree yet.
 
-```bash
-kubectl logs -n $USER deployment/kluge-controller
-```
+## Specs
 
----
-
-## 🎯 Roadmap
-
-- ✅ **MVP: Helm-based deployment**  
-- 🔜 **Multi-user job scheduling**  
-- 🔜 **Web dashboard for job monitoring**  
-- 🔜 **Cloud autoscaling**  
-
----
-
-## 🏆 Contributing
-
-Contributions are welcome! Open an issue or submit a PR to help shape **Kluge**. 🚀
+| Doc | What it decides |
+| --- | --- |
+| [Decisions](docs/spec/decisions.md) | What this session kept, and what it set aside |
+| [Language](docs/spec/language.md) | The sentence, the files, abbreviations, completion |
+| [Checks](docs/spec/checks.md) | Client and server diagnostics, fixes, security |
+| [Cluster](docs/spec/cluster.md) | Install, the reserved pool, how Slinky coexistence works |
+| [Roadmap](docs/spec/roadmap.md) | What is in the first build, and what waits |
