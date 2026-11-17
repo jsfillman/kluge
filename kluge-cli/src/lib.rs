@@ -1,5 +1,21 @@
 use kluge_check::{lex, match_phrase, match_verb, read_sbatch, resolve, Match, Phrase, Spec};
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct Screen {
+    pub rows: Vec<String>,
+    pub explain: String,
+    pub outputs: Vec<String>,
+}
+
+pub fn screen_from(rows: Vec<String>, explain: &str, into: &str, files: &[String]) -> Screen {
+    let (outputs, _) = kluge_check::select_outputs(into, files);
+    Screen {
+        rows,
+        explain: explain.to_string(),
+        outputs,
+    }
+}
+
 pub struct WatchModel {
     pub rows: Vec<String>,
     pub detached: bool,
