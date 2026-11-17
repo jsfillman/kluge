@@ -3,6 +3,53 @@ pub fn crate_name() -> &'static str {
 }
 
 #[derive(Debug, Clone)]
+pub struct FsView {
+    pub root: String,
+    pub existing: Vec<String>,
+    pub links: Vec<(String, String)>,
+}
+
+pub fn check_paths(spec: &Spec, fs: &FsView) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    for (label, value) in [("dir", spec.dir.as_deref()), ("into", spec.into.as_deref())] {
+        let Some(value) = value else { continue };
+        let resolved = resolve_fs_path(value, fs);
+        if !within_root(&resolved, &fs.root) {
+            diagnostics.push(plain(Code::PathEscape, format!("{label} leaves the team root"), 1, value));
+        } else if !fs.existing.iter().any(|path| path == &resolved) {
+            diagnostics.push(plain(Code::PathMissing, format!("{label} does not exist"), 1, value));
+        }
+    }
+    diagnostics
+}
+
+fn resolve_fs_path(path: &str, fs: &FsView) -> String {
+    let path = fs
+        .links
+        .iter()
+        .find(|(from, _)| from == path)
+        .map(|(_, target)| target.clone())
+        .unwrap_or_else(|| path.to_string());
+    let mut stack = Vec::new();
+    for part in path.split('/') {
+        if part.is_empty() || part == "." {
+            continue;
+        }
+        if part == ".." {
+            stack.pop();
+        } else {
+            stack.push(part);
+        }
+    }
+    format!("/{}", stack.join("/"))
+}
+
+fn within_root(path: &str, root: &str) -> bool {
+    let root = root.trim_end_matches('/');
+    path == root || path.starts_with(&format!("{root}/"))
+}
+
+#[derive(Debug, Clone)]
 pub struct NodeFact {
     pub kind: String,
     pub gpus: u32,
