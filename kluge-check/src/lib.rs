@@ -2,6 +2,97 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+#[derive(Debug, Clone)]
+pub struct NodeFact {
+    pub kind: String,
+    pub gpus: u32,
+    pub healthy: bool,
+    pub free: bool,
+}
+
+pub fn check_pool(spec: &Spec, nodes: &[NodeFact], quota: u32) -> Vec<Diagnostic> {
+    let Some(shape) = spec.on.as_ref() else {
+        return Vec::new();
+    };
+    let matching: Vec<&NodeFact> = nodes.iter().filter(|node| node.kind == shape.kind).collect();
+    if matching.is_empty() {
+        return vec![plain(Code::PoolType, "gpu type is not on the reserved pool", 1, &shape.kind)];
+    }
+    let per_node = matching[0].gpus;
+    let healthy: Vec<&NodeFact> = matching.iter().copied().filter(|node| node.healthy).collect();
+    let healthy_count = healthy.len() as u32;
+    if shape.count > per_node {
+        if per_node == 0 || shape.count % per_node != 0 {
+            return vec![plain(Code::PoolShape, "no machine has this shape", 1, &format!("on {} {}", shape.count, shape.kind))];
+        }
+        let wanted = shape.count / per_node;
+        let total_gpus = per_node * healthy_count;
+        let quota_machines = if per_node == 0 { 0 } else { quota / per_node };
+        let legal = healthy_count.min(quota_machines);
+        if wanted <= legal {
+            return vec![suggestion_diag(
+                Code::PoolShape,
+                format!("each reserved node has {per_node} {}", shape.kind),
+                1,
+                &format!("on {} {}", shape.count, shape.kind),
+                None,
+                Suggestion {
+                    auto: true,
+                    replacement: format!("on {per_node} {}\nacross {wanted}", shape.kind),
+                    command: String::new(),
+                },
+            )];
+        }
+        return vec![suggestion_diag(
+            Code::PoolCapacity,
+            "shape is larger than the pool",
+            1,
+            &format!("on {} {}", shape.count, shape.kind),
+            None,
+            Suggestion {
+                auto: false,
+                replacement: format!("on {per_node} {}\nacross {legal}", shape.kind),
+                command: String::new(),
+            },
+        )];
+    }
+    let requested = spec.across;
+    let total_requested = requested * shape.count;
+    if requested > healthy_count || total_requested > quota {
+        let legal = healthy_count.min(if shape.count == 0 { 0 } else { quota / shape.count });
+        return vec![suggestion_diag(
+            Code::PoolCapacity,
+            "shape is larger than the pool",
+            1,
+            &format!("across {requested}"),
+            None,
+            Suggestion {
+                auto: false,
+                replacement: format!("on {} {}\nacross {legal}", shape.count, shape.kind),
+                command: String::new(),
+            },
+        )];
+    }
+    let free = healthy.iter().filter(|node| node.free).count() as u32;
+    if requested > free {
+        return vec![Diagnostic {
+            code: Code::PoolWaiting,
+            severity: Severity::Note,
+            message: format!("{free} of {healthy_count} machines are free"),
+            span: Span {
+                file: String::new(),
+                line: 1,
+                column: 1,
+                text: format!("across {requested}"),
+                label: None,
+            },
+            notes: Vec::new(),
+            suggestions: Vec::new(),
+        }];
+    }
+    Vec::new()
+}
+
 pub fn render_workload(spec: &Spec) -> String {
     let name = spec.name.as_deref().unwrap_or("kluge");
     let deadline = spec.duration.map(|d| d.as_secs()).unwrap_or(0);
@@ -437,6 +528,8 @@ pub enum Code {
     TimeCeiling,
     #[serde(rename = "pool.type")]
     PoolType,
+    #[serde(rename = "pool.waiting")]
+    PoolWaiting,
     #[serde(rename = "name.taken")]
     NameTaken,
     #[serde(rename = "name.syntax")]
@@ -460,6 +553,7 @@ pub enum Code {
 pub enum Severity {
     Error,
     Warning,
+    Note,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -487,6 +581,7 @@ pub fn render(diagnostic: &Diagnostic) -> String {
     let severity = match diagnostic.severity {
         Severity::Error => "error",
         Severity::Warning => "warning",
+        Severity::Note => "note",
     };
     let width = diagnostic.span.line.to_string().len().max(2);
     let gutter = " ".repeat(width);
