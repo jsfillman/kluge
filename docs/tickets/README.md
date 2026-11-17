@@ -28,9 +28,9 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E6-T1](E6-T1.md) | done | E5-T3 | Admission uses `kluge-check` |
 | [E6-T2](E6-T2.md) | done | E4-T2, E6-T1 | Reconcile a `Run` to a Job |
 | [E6-T3](E6-T3.md) | done | E6-T1 | Check endpoint |
-| [E7-T1](E7-T1.md) | open | E6-T2 | Helm chart |
-| [E8-T1](E8-T1.md) | open | E3-T2, E6-T3 | Submit and dry-run |
-| [E8-T2](E8-T2.md) | open | E8-T1 | Status, logs, cancel |
+| [E7-T1](E7-T1.md) | done | E6-T2 | Helm chart |
+| [E8-T1](E8-T1.md) | done | E3-T2, E6-T3 | Submit and dry-run |
+| [E8-T2](E8-T2.md) | done | E8-T1 | Status, logs, cancel |
 | [E8-T3](E8-T3.md) | blocked-on-cluster | E8-T2, E7-T1 | One real GPU |
 | [E9-T1](E9-T1.md) | open | E8-T2 | `watch` model |
 | [E9-T2](E9-T2.md) | open | E8-T2, E5-T1 | `explain` |

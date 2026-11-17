@@ -39,9 +39,24 @@ pub fn completion_script(shell: &str) -> String {
 
 pub trait CheckClient {
     fn check(&self, spec: &Spec) -> Result<Vec<kluge_check::Diagnostic>, String>;
+    fn submit(&self, spec: &Spec) -> Result<String, String> {
+        Ok(spec.name.clone().unwrap_or_else(|| "run".to_string()))
+    }
+    fn list(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
+    fn logs(&self, _name: &str) -> Result<String, String> {
+        Ok(String::new())
+    }
+    fn cancel(&self, _name: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 pub fn execute(args: &[String], client: &dyn CheckClient) -> (i32, String) {
+    if let Some((code, out)) = dispatch_read(args, client) {
+        return (code, out);
+    }
     let mut dry_run = false;
     let mut json = false;
     let mut strict = false;
@@ -113,8 +128,61 @@ pub fn execute(args: &[String], client: &dyn CheckClient) -> (i32, String) {
     if !json {
         out.push_str(&kluge_check::render_sentence(&spec));
     }
-    let _ = dry_run;
+    if !dry_run {
+        match client.submit(&spec) {
+            Ok(name) => {
+                if !json {
+                    out.push_str(&name);
+                    out.push('\n');
+                }
+            }
+            Err(err) => return (1, err),
+        }
+    }
     (0, out)
+}
+
+fn dispatch_read(args: &[String], client: &dyn CheckClient) -> Option<(i32, String)> {
+    let verb = args.get(1).map(String::as_str).unwrap_or("");
+    match match_verb(verb) {
+        Match::One("status") => Some(show_status(args.get(2).map(String::as_str), client)),
+        Match::One("logs") => Some(show_logs(args.get(2).map(String::as_str), client)),
+        Match::One("cancel") => Some(cancel_run(args.get(2).map(String::as_str), client)),
+        _ => None,
+    }
+}
+
+fn show_status(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
+    let names = client.list().unwrap_or_default();
+    let Some(name) = name else {
+        return (0, names.join("\n"));
+    };
+    let hits: Vec<_> = names.into_iter().filter(|item| item.starts_with(name)).collect();
+    match hits.len() {
+        1 => (0, hits[0].clone()),
+        0 => (1, format!("unknown run {name}")),
+        _ => (1, format!("parse.ambiguous {}", hits.join(" "))),
+    }
+}
+
+fn show_logs(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
+    let Some(name) = name else {
+        return (1, "logs needs a run".to_string());
+    };
+    match client.logs(name) {
+        Ok(body) => (0, body),
+        Err(err) => (1, err),
+    }
+}
+
+fn cancel_run(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
+    let Some(name) = name else {
+        return (1, "cancel needs a run".to_string());
+    };
+    match client.cancel(name) {
+        Ok(()) => (0, name.to_string()),
+        Err(err) => (1, err),
+    }
 }
 
 fn render_list(diagnostics: &[kluge_check::Diagnostic], json: bool) -> String {
