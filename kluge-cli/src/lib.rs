@@ -1,5 +1,125 @@
 use kluge_check::{lex, match_phrase, match_verb, read_sbatch, resolve, Match, Phrase, Spec};
 
+pub trait CheckClient {
+    fn check(&self, spec: &Spec) -> Result<Vec<kluge_check::Diagnostic>, String>;
+}
+
+pub fn execute(args: &[String], client: &dyn CheckClient) -> (i32, String) {
+    let mut dry_run = false;
+    let mut json = false;
+    let mut strict = false;
+    let mut fix = false;
+    let mut positional = Vec::new();
+    for (index, arg) in args.iter().enumerate() {
+        if index == 0 {
+            positional.push(arg.clone());
+            continue;
+        }
+        match arg.as_str() {
+            "--dry-run" => dry_run = true,
+            "--json" => json = true,
+            "--strict" => strict = true,
+            "--fix" => fix = true,
+            "--yes" => {}
+            _ => positional.push(arg.clone()),
+        }
+    }
+    if fix {
+        if let Some(path) = positional
+            .iter()
+            .find(|arg| arg.ends_with(".kluge") || arg.ends_with(".sbatch"))
+        {
+            let pool = vec![kluge_check::PoolMachine {
+                kind: "h100".to_string(),
+                gpus: 8,
+                count: 8,
+            }];
+            let outcome = kluge_check::apply_auto(std::path::Path::new(path), &pool);
+            let code = if outcome
+                .diagnostics
+                .iter()
+                .any(|item| item.severity == kluge_check::Severity::Error)
+            {
+                1
+            } else {
+                0
+            };
+            return (code, render_list(&outcome.diagnostics, json));
+        }
+    }
+    let local = local_diagnostics(&positional);
+    if local
+        .iter()
+        .any(|item| item.severity == kluge_check::Severity::Error)
+    {
+        return (1, render_list(&local, json));
+    }
+    let spec = match parse_invocation(&positional) {
+        Ok(spec) => spec,
+        Err(err) => return (1, err),
+    };
+    let remote = match client.check(&spec) {
+        Ok(diagnostics) => diagnostics,
+        Err(err) => return (1, err),
+    };
+    let failed = remote
+        .iter()
+        .any(|item| item.severity == kluge_check::Severity::Error)
+        || (strict
+            && remote
+                .iter()
+                .any(|item| item.severity == kluge_check::Severity::Warning));
+    if failed {
+        return (1, render_list(&remote, json));
+    }
+    let mut out = render_list(&remote, json);
+    if !json {
+        out.push_str(&kluge_check::render_sentence(&spec));
+    }
+    let _ = dry_run;
+    (0, out)
+}
+
+fn render_list(diagnostics: &[kluge_check::Diagnostic], json: bool) -> String {
+    if json {
+        serde_json::to_string(diagnostics).unwrap_or_default()
+    } else {
+        diagnostics.iter().map(kluge_check::render).collect()
+    }
+}
+
+fn local_diagnostics(args: &[String]) -> Vec<kluge_check::Diagnostic> {
+    if !matches!(args.get(1).map(String::as_str).map(match_verb), Some(Match::One("run"))) {
+        return Vec::new();
+    }
+    let rest = &args[2..];
+    let Some(head) = rest.first() else {
+        return kluge_check::check_local_layers("", "", "");
+    };
+    if head.ends_with(".sbatch") {
+        let text = std::fs::read_to_string(head).unwrap_or_default();
+        return kluge_check::check_local_sbatch(&text);
+    }
+    if head.ends_with(".kluge") {
+        let text = std::fs::read_to_string(head).unwrap_or_default();
+        return kluge_check::check_local_layers("", &text, "");
+    }
+    let mut text = format!("run {head}\n");
+    let mut index = 1;
+    while index < rest.len() {
+        text.push_str(&rest[index]);
+        text.push(' ');
+        index += 1;
+        while index < rest.len() && !is_phrase(&rest[index]) {
+            text.push_str(&rest[index]);
+            text.push(' ');
+            index += 1;
+        }
+        text.push('\n');
+    }
+    kluge_check::check_local_layers("", &text, "")
+}
+
 pub fn parse_invocation(args: &[String]) -> Result<Spec, String> {
     let verb = args.get(1).map(String::as_str).unwrap_or("");
     match match_verb(verb) {
