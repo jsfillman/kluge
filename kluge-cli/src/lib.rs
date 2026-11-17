@@ -1,5 +1,42 @@
 use kluge_check::{lex, match_phrase, match_verb, read_sbatch, resolve, Match, Phrase, Spec};
 
+pub fn complete(
+    previous: &[String],
+    files: &[String],
+    gpus: &[String],
+    runs: &[String],
+) -> Vec<String> {
+    let last = previous.last().map(String::as_str).unwrap_or("");
+    if previous.len() <= 1 {
+        return kluge_check::VERBS.iter().map(|verb| (*verb).to_string()).collect();
+    }
+    match match_verb(last) {
+        Match::One("run") => files
+            .iter()
+            .filter(|file| {
+                file.ends_with(".py")
+                    || file.ends_with(".sh")
+                    || file.ends_with(".kluge")
+                    || file.ends_with(".sbatch")
+            })
+            .cloned()
+            .collect(),
+        Match::One("logs") | Match::One("cancel") => runs.to_vec(),
+        _ => match match_phrase(last) {
+            Match::One("on") => gpus.to_vec(),
+            Match::One("for") => ["30m", "6h", "6 hours"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            _ => Vec::new(),
+        },
+    }
+}
+
+pub fn completion_script(shell: &str) -> String {
+    format!("# kluge completion for {shell}\nkluge complete\n")
+}
+
 pub trait CheckClient {
     fn check(&self, spec: &Spec) -> Result<Vec<kluge_check::Diagnostic>, String>;
 }
