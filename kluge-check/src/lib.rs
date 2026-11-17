@@ -63,6 +63,17 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body.push_str(&format!("{i2}volumeMounts:\n"));
     body.push_str(&format!("{i2}- name: team\n"));
     body.push_str(&format!("{i4}mountPath: {dir}\n"));
+    if let Some(on) = &spec.on {
+        if !on.kind.is_empty() {
+            body.push_str(&format!("{i}nodeSelector:\n"));
+            body.push_str(&format!("{i2}kluge.dev/gpu: {}\n", on.kind));
+        }
+    }
+    body.push_str(&format!("{i}tolerations:\n"));
+    body.push_str(&format!("{i}- key: kluge.dev/pool\n"));
+    body.push_str(&format!("{i2}operator: Equal\n"));
+    body.push_str(&format!("{i2}value: reserved\n"));
+    body.push_str(&format!("{i2}effect: NoSchedule\n"));
     body.push_str(&format!("{i}volumes:\n"));
     body.push_str(&format!("{i}- name: team\n"));
     body.push_str(&format!("{i2}persistentVolumeClaim:\n"));

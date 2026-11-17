@@ -35,6 +35,13 @@ spec:
               volumeMounts:
               - name: team
                 mountPath: /scratch/kernel-search
+            nodeSelector:
+              kluge.dev/gpu: h100
+            tolerations:
+            - key: kluge.dev/pool
+              operator: Equal
+              value: reserved
+              effect: NoSchedule
             volumes:
             - name: team
               persistentVolumeClaim:
