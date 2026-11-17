@@ -97,6 +97,28 @@ pub trait CheckClient {
     }
 }
 
+pub fn main_args(args: &[String]) -> (i32, String) {
+    let verb = args.get(1).map(String::as_str).unwrap_or("");
+    match match_verb(verb) {
+        Match::None => (1, unmatched_verb(verb)),
+        Match::Ambiguous(names) => (1, names.join(", ")),
+        Match::One("run") => {
+            let local = local_diagnostics(args);
+            if local
+                .iter()
+                .any(|item| item.severity == kluge_check::Severity::Error)
+            {
+                return (1, local.iter().map(kluge_check::render).collect());
+            }
+            match parse_invocation(args) {
+                Ok(spec) => (0, kluge_check::render_sentence(&spec)),
+                Err(err) => (1, err),
+            }
+        }
+        Match::One(other) => (1, format!("{other} needs a cluster")),
+    }
+}
+
 pub fn execute(args: &[String], client: &dyn CheckClient) -> (i32, String) {
     if let Some((code, out)) = dispatch_read(args, client) {
         return (code, out);

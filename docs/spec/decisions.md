@@ -31,11 +31,31 @@ Slinky, or any other Slurm-on-Kubernetes install, can keep the rest of the clust
 
 Rust, in one Cargo workspace. `kluge-check` holds the grammar and the checks. `kluge-cli` is the binary. `kluge-controller` is the webhook and the reconciler. The check functions are shared so the CLI and the controller cannot drift. Go is not used unless a later ticket has to extend Kueue itself. The Python files under `cli/` stay historical.
 
+## The core
+
+The product is the moment a Slurm script looks like a historical accident.
+
+```bash
+#SBATCH --nodes=4
+#SBATCH --gpus-per-node=8
+#SBATCH --gres=gpu:h100:8
+#SBATCH --time=06:00:00
+```
+
+is the same fact as:
+
+```bash
+kluge run train.py on 8 h100 across 4 for 6 hours
+```
+
+A bad sentence is refused before it is queued, with the line, the reason, and the edit. Abbreviations are one letter. `#SBATCH` is an import, not the interface. The menu bar, the output sync, and the TUI do not do this. They stay off the critical path.
+
 ## Current scope
 
-1. Install onto an existing cluster in a way an infra team will accept: one chart, a tainted pool, Slinky untouched.
-2. The sentence, the files, abbreviations, completion, and errors that refuse a bad submit and can apply an unambiguous fix.
-3. After that, a detachable status TUI, `debug`, and `attach`.
-4. After that, a desktop app and output sync.
+1. The sentence, the files, abbreviations, and errors that refuse a bad submit and can apply an unambiguous fix. The `kluge` binary performs that with no cluster.
+2. Install onto an existing cluster: one chart, a tainted pool, Slinky untouched.
+3. After the sentence is real, `status`, `logs`, and `cancel`.
+4. The detachable TUI, `debug`, and `attach` are useful and already specified. They are not the core.
+5. The desktop app and output sync stay blocked. They are not what makes Slurm look obsolete.
 
 Agents use the same commands and `--json`. There is no separate agent API while the commands are still changing.
