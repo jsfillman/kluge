@@ -25,7 +25,8 @@ torchrun train.py --epochs 10
     assert_eq!(spec.memory.as_deref(), Some("16G"));
     assert_eq!(spec.duration, Some(std::time::Duration::from_secs(3600)));
     assert_eq!(spec.team.as_deref(), Some("kernel-search"));
-    assert_eq!(spec.into.as_deref(), Some("results/out.txt"));
+    assert_eq!(spec.stdout.as_deref(), Some("results/out.txt"));
+    assert_eq!(spec.into, None);
 }
 
 #[test]

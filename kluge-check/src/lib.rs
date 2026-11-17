@@ -282,33 +282,47 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
             body.push_str(&format!("{i2}- {arg}\n"));
         }
     }
-    if !spec.with.is_empty() {
-        body.push_str(&format!("{i2}env:\n"));
-        for (key, value) in &spec.with {
-            body.push_str(&format!("{i2}- name: {key}\n"));
-            body.push_str(&format!("{i4}value: {value}\n"));
-        }
+    let memory = spec.memory.clone().unwrap_or_else(|| "16Gi".to_string());
+    let shm = shm_size(&memory);
+    let job = spec.name.as_deref().unwrap_or("kluge");
+    body.push_str(&format!("{i2}env:\n"));
+    for (key, value) in &spec.with {
+        push_env(&mut body, &i2, &i4, key, value);
+    }
+    for (key, value) in allocation_env(spec, job, gpus) {
+        push_env(&mut body, &i2, &i4, &key, &value);
+    }
+    if let Some(stdout) = &spec.stdout {
+        let expanded = expand_file(stdout, job);
+        let stderr = spec
+            .stderr
+            .as_deref()
+            .map(|path| expand_file(path, job))
+            .unwrap_or_else(|| expanded.clone());
+        push_env(&mut body, &i2, &i4, "KLUGE_STDOUT", &expanded);
+        push_env(&mut body, &i2, &i4, "KLUGE_STDERR", &stderr);
+    } else if let Some(stderr) = &spec.stderr {
+        let expanded = expand_file(stderr, job);
+        push_env(&mut body, &i2, &i4, "KLUGE_STDERR", &expanded);
     }
     body.push_str(&format!("{i2}resources:\n"));
     body.push_str(&format!("{i4}requests:\n"));
     if let Some(cpu) = &spec.cpus {
         body.push_str(&format!("{i6}cpu: \"{cpu}\"\n"));
     }
-    if let Some(memory) = &spec.memory {
-        body.push_str(&format!("{i6}memory: {memory}\n"));
-    }
+    body.push_str(&format!("{i6}memory: {memory}\n"));
     body.push_str(&format!("{i6}nvidia.com/gpu: \"{gpus}\"\n"));
     body.push_str(&format!("{i4}limits:\n"));
     if let Some(cpu) = &spec.cpus {
         body.push_str(&format!("{i6}cpu: \"{cpu}\"\n"));
     }
-    if let Some(memory) = &spec.memory {
-        body.push_str(&format!("{i6}memory: {memory}\n"));
-    }
+    body.push_str(&format!("{i6}memory: {memory}\n"));
     body.push_str(&format!("{i6}nvidia.com/gpu: \"{gpus}\"\n"));
     body.push_str(&format!("{i2}volumeMounts:\n"));
     body.push_str(&format!("{i2}- name: team\n"));
     body.push_str(&format!("{i4}mountPath: {dir}\n"));
+    body.push_str(&format!("{i2}- name: dshm\n"));
+    body.push_str(&format!("{i4}mountPath: /dev/shm\n"));
     if let Some(on) = &spec.on {
         if !on.kind.is_empty() {
             body.push_str(&format!("{i}nodeSelector:\n"));
@@ -324,7 +338,75 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body.push_str(&format!("{i}- name: team\n"));
     body.push_str(&format!("{i2}persistentVolumeClaim:\n"));
     body.push_str(&format!("{i4}claimName: team\n"));
+    body.push_str(&format!("{i}- name: dshm\n"));
+    body.push_str(&format!("{i2}emptyDir:\n"));
+    body.push_str(&format!("{i4}medium: Memory\n"));
+    body.push_str(&format!("{i4}sizeLimit: {shm}\n"));
     body
+}
+
+fn push_env(body: &mut String, i2: &str, i4: &str, key: &str, value: &str) {
+    body.push_str(&format!("{i2}- name: {key}\n"));
+    body.push_str(&format!("{i4}value: {value}\n"));
+}
+
+fn allocation_env(spec: &Spec, job: &str, gpus: u32) -> Vec<(String, String)> {
+    let nodes = spec.across.to_string();
+    let cpus = spec.cpus.clone().unwrap_or_else(|| "1".to_string());
+    let submit = spec.dir.clone().unwrap_or_default();
+    let gpus = gpus.to_string();
+    let pairs = [
+        ("SLURM_JOB_ID", job.to_string()),
+        ("SLURM_JOB_NAME", job.to_string()),
+        ("SLURM_NNODES", nodes.clone()),
+        ("SLURM_JOB_NUM_NODES", nodes.clone()),
+        ("SLURM_NODEID", "0".to_string()),
+        ("SLURM_PROCID", "0".to_string()),
+        ("SLURM_LOCALID", "0".to_string()),
+        ("SLURM_NTASKS", nodes.clone()),
+        ("SLURM_CPUS_PER_TASK", cpus),
+        ("SLURM_GPUS_ON_NODE", gpus),
+        ("SLURM_SUBMIT_DIR", submit),
+        ("RANK", "0".to_string()),
+        ("WORLD_SIZE", nodes),
+        ("LOCAL_RANK", "0".to_string()),
+        ("MASTER_ADDR", job.to_string()),
+        ("MASTER_PORT", "29500".to_string()),
+    ];
+    pairs
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value))
+        .collect()
+}
+
+fn expand_file(pattern: &str, job: &str) -> String {
+    pattern
+        .replace("%j", job)
+        .replace("%x", job)
+        .replace("%n", "0")
+}
+
+fn shm_size(memory: &str) -> String {
+    let bytes = parse_memory_bytes(memory).unwrap_or(16 * 1024 * 1024 * 1024);
+    let gi = bytes / 2 / (1024 * 1024 * 1024);
+    format!("{gi}Gi")
+}
+
+fn parse_memory_bytes(value: &str) -> Option<u64> {
+    let value = value.trim();
+    let split = value
+        .find(|c: char| c.is_ascii_alphabetic())
+        .unwrap_or(value.len());
+    let (number, suffix) = value.split_at(split);
+    let number: u64 = number.parse().ok()?;
+    let mult = match suffix.to_ascii_lowercase().as_str() {
+        "k" | "ki" | "kb" => 1024,
+        "m" | "mi" | "mb" => 1024 * 1024,
+        "g" | "gi" | "gb" => 1024 * 1024 * 1024,
+        "t" | "ti" | "tb" => 1024 * 1024 * 1024 * 1024,
+        _ => return None,
+    };
+    Some(number.saturating_mul(mult))
 }
 
 #[derive(Debug, Clone)]
@@ -587,7 +669,7 @@ pub fn check_local_layers(klugefile: &str, file: &str, cli: &str) -> Vec<Diagnos
 
 pub fn check_local_sbatch(text: &str) -> Vec<Diagnostic> {
     match read_sbatch(text) {
-        Err(error) => vec![plain(Code::ParseSbatch, "directive has no translation", error.line, error.text)],
+        Err(error) => vec![plain(Code::ParseSbatch, error.message, error.line, error.text)],
         Ok(spec) => {
             let mut diagnostics = Vec::new();
             if spec.duration.is_none() {
@@ -815,6 +897,7 @@ pub fn sample_pool_shape() -> Diagnostic {
 pub struct SbatchError {
     pub line: usize,
     pub text: String,
+    pub message: String,
 }
 
 pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
@@ -832,6 +915,8 @@ pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
         cpus: None,
         memory: None,
         script: None,
+        stdout: None,
+        stderr: None,
         overrides: Vec::new(),
     };
     let mut body = Vec::new();
@@ -866,6 +951,7 @@ fn apply_sbatch(spec: &mut Spec, line: usize, directive: &str) -> Result<(), Sba
     let reject = || SbatchError {
         line,
         text: format!("#SBATCH {directive}"),
+        message: "directive has no translation".to_string(),
     };
     let (flag, value) = split_sbatch_flag(directive).ok_or_else(reject)?;
     match flag.as_str() {
@@ -884,7 +970,18 @@ fn apply_sbatch(spec: &mut Spec, line: usize, directive: &str) -> Result<(), Sba
         "--mem" => spec.memory = Some(value),
         "--time" => spec.duration = Some(parse_slurm_time(&value).map_err(|_| reject())?),
         "--account" => spec.team = Some(value),
-        "--output" => spec.into = Some(value),
+        "--output" => spec.stdout = Some(value),
+        "--error" => spec.stderr = Some(value),
+        "--chdir" => spec.dir = Some(value),
+        "--export" => {
+            if value.split(',').any(|name| name.trim() == "ALL") {
+                return Err(SbatchError {
+                    line,
+                    text: format!("#SBATCH {directive}"),
+                    message: "the container starts clean".to_string(),
+                });
+            }
+        }
         _ => return Err(reject()),
     }
     Ok(())
@@ -1029,6 +1126,8 @@ pub struct Spec {
     pub cpus: Option<String>,
     pub memory: Option<String>,
     pub script: Option<String>,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
     pub overrides: Vec<OverrideNote>,
 }
 
@@ -1057,6 +1156,8 @@ pub fn resolve(
         cpus: None,
         memory: None,
         script: None,
+        stdout: None,
+        stderr: None,
         overrides: Vec::new(),
     };
     let mut origin: Vec<(&'static str, Layer)> = Vec::new();

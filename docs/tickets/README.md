@@ -22,7 +22,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E3-T3](E3-T3.md) | done | E3-T1 | Completion candidates |
 | [E4-T1](E4-T1.md) | done | E1-T4 | Job and JobSet rendering |
 | [E4-T2](E4-T2.md) | done | E4-T1 | Fixed pod template |
-| [E4-T3](E4-T3.md) | open | E4-T2, E11-T2 | Runtime compatibility |
+| [E4-T3](E4-T3.md) | done | E4-T2, E11-T2 | Runtime compatibility |
 | [E5-T1](E5-T1.md) | done | E2-T1, E4-T1 | Pool checks |
 | [E5-T2](E5-T2.md) | done | E5-T1 | Path checks |
 | [E5-T3](E5-T3.md) | done | E5-T1 | Image, name, and auth |
@@ -50,7 +50,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E1 Grammar](epics/E1.md) | E1-T1 … E1-T6 | E0 is done |
 | [E2 Checks](epics/E2.md) | E2-T1 … E2-T4 | E1 has produced phrases |
 | [E3 CLI](epics/E3.md) | E3-T1 … E3-T3 | The library can resolve a sentence |
-| [E4 Jobs](epics/E4.md) | E4-T1, E4-T2 | A spec exists without a cluster |
+| [E4 Jobs](epics/E4.md) | E4-T1, E4-T2, E4-T3 | A spec exists without a cluster |
 | [E5 Cluster checks](epics/E5.md) | E5-T1 … E5-T3 | Diagnostics and the spec exist |
 | [E6 Controller](epics/E6.md) | E6-T1 … E6-T3 | Checks are pure functions |
 | [E7 Chart](epics/E7.md) | E7-T1 | The controller's objects are known |

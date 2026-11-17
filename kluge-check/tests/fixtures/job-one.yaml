@@ -16,6 +16,38 @@ spec:
         env:
         - name: NCCL_DEBUG
           value: INFO
+        - name: SLURM_JOB_ID
+          value: ablation
+        - name: SLURM_JOB_NAME
+          value: ablation
+        - name: SLURM_NNODES
+          value: 1
+        - name: SLURM_JOB_NUM_NODES
+          value: 1
+        - name: SLURM_NODEID
+          value: 0
+        - name: SLURM_PROCID
+          value: 0
+        - name: SLURM_LOCALID
+          value: 0
+        - name: SLURM_NTASKS
+          value: 1
+        - name: SLURM_CPUS_PER_TASK
+          value: 4
+        - name: SLURM_GPUS_ON_NODE
+          value: 8
+        - name: SLURM_SUBMIT_DIR
+          value: /scratch/kernel-search
+        - name: RANK
+          value: 0
+        - name: WORLD_SIZE
+          value: 1
+        - name: LOCAL_RANK
+          value: 0
+        - name: MASTER_ADDR
+          value: ablation
+        - name: MASTER_PORT
+          value: 29500
         resources:
           requests:
             cpu: "4"
@@ -28,6 +60,8 @@ spec:
         volumeMounts:
         - name: team
           mountPath: /scratch/kernel-search
+        - name: dshm
+          mountPath: /dev/shm
       nodeSelector:
         kluge.dev/gpu: h100
       tolerations:
@@ -39,3 +73,7 @@ spec:
       - name: team
         persistentVolumeClaim:
           claimName: team
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Gi

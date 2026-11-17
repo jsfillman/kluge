@@ -36,7 +36,8 @@ fn sbatch_file_is_loaded() {
     std::fs::write(&path, "#SBATCH --job-name=sample\necho hi\n").unwrap();
     let spec = parse_invocation(&args(&["kluge", "run", path.to_str().unwrap()])).unwrap();
     assert_eq!(spec.name.as_deref(), Some("sample"));
-    assert_eq!(spec.run, vec!["echo".to_string(), "hi".to_string()]);
+    assert!(spec.run.is_empty());
+    assert_eq!(spec.script.as_deref(), Some("echo hi"));
     let _ = std::fs::remove_file(path);
 }
 
