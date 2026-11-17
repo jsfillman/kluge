@@ -34,7 +34,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E8-T3](E8-T3.md) | blocked-on-cluster | E8-T2, E7-T1 | One real GPU |
 | [E9-T1](E9-T1.md) | done | E8-T2 | `watch` model |
 | [E9-T2](E9-T2.md) | done | E8-T2, E5-T1 | `explain` |
-| [E9-T3](E9-T3.md) | open | E8-T2 | `debug` and `attach` |
+| [E9-T3](E9-T3.md) | done | E8-T2 | `debug` and `attach` |
 | [E10-T1](E10-T1.md) | open | E9-T3 | Output selection |
 | [E10-T2](E10-T2.md) | open | E10-T1 | View model, no window |
 | [E10-T3](E10-T3.md) | blocked-on-display | E10-T2 | Menu-bar shell |

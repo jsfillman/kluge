@@ -76,6 +76,9 @@ pub trait CheckClient {
     fn explain(&self, name: &str) -> Result<kluge_check::Diagnostic, String> {
         Err(format!("unknown run {name}"))
     }
+    fn attach(&self, name: &str) -> Result<String, String> {
+        Ok(format!("pod/{name}"))
+    }
 }
 
 pub fn execute(args: &[String], client: &dyn CheckClient) -> (i32, String) {
@@ -174,6 +177,8 @@ fn dispatch_read(args: &[String], client: &dyn CheckClient) -> Option<(i32, Stri
         Match::One("logs") => Some(show_logs(args.get(2).map(String::as_str), client)),
         Match::One("cancel") => Some(cancel_run(args.get(2).map(String::as_str), client)),
         Match::One("explain") => Some(explain_run(args.get(2).map(String::as_str), client)),
+        Match::One("debug") => Some(debug_run(args, client)),
+        Match::One("attach") => Some(attach_run(args.get(2).map(String::as_str), client)),
         _ => None,
     }
 }
@@ -207,6 +212,38 @@ fn cancel_run(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
     };
     match client.cancel(name) {
         Ok(()) => (0, name.to_string()),
+        Err(err) => (1, err),
+    }
+}
+
+fn debug_run(args: &[String], client: &dyn CheckClient) -> (i32, String) {
+    let mut positional = vec![args[0].clone(), "run".to_string()];
+    positional.extend(args.iter().skip(2).cloned());
+    let spec = match parse_invocation(&positional) {
+        Ok(spec) => spec,
+        Err(err) => return (1, err),
+    };
+    let kind = spec
+        .on
+        .as_ref()
+        .map(|shape| shape.kind.clone())
+        .unwrap_or_else(|| "h100".to_string());
+    let mut rewritten = spec;
+    rewritten.on = Some(kluge_check::GpuShape { count: 1, kind });
+    rewritten.across = 1;
+    let sentence = kluge_check::render_sentence(&rewritten);
+    match client.submit(&rewritten) {
+        Ok(_) => (0, sentence),
+        Err(err) => (1, err),
+    }
+}
+
+fn attach_run(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
+    let Some(name) = name else {
+        return (1, "attach needs a run".to_string());
+    };
+    match client.attach(name) {
+        Ok(target) => (0, target),
         Err(err) => (1, err),
     }
 }
