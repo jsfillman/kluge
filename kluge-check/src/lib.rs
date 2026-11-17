@@ -2,6 +2,330 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+#[derive(Debug, Clone)]
+pub struct PoolMachine {
+    pub kind: String,
+    pub gpus: u32,
+    pub count: u32,
+}
+
+pub struct ApplyOutcome {
+    pub diagnostics: Vec<Diagnostic>,
+    pub submitted: bool,
+}
+
+pub fn suggestions_for(text: &str, pool: &[PoolMachine]) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    for (index, raw) in text.lines().enumerate() {
+        let line = index + 1;
+        let trimmed = raw.trim();
+        if trimmed == "#SBATCH --exclusive" {
+            diagnostics.push(suggestion_diag(
+                Code::ParseSbatch,
+                "directive has no translation",
+                line,
+                trimmed,
+                Some("reserved nodes are already exclusive".to_string()),
+                Suggestion {
+                    auto: true,
+                    replacement: String::new(),
+                    command: String::new(),
+                },
+            ));
+            continue;
+        }
+        let Some((token, value)) = trimmed.split_once(char::is_whitespace) else {
+            continue;
+        };
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        if matches!(match_phrase(token), Match::None) {
+            if let Some(phrase) = closest_phrase(token) {
+                diagnostics.push(suggestion_diag(
+                    Code::ParseUnknown,
+                    "unknown phrase",
+                    line,
+                    trimmed,
+                    None,
+                    Suggestion {
+                        auto: true,
+                        replacement: format!("{phrase} {value}"),
+                        command: String::new(),
+                    },
+                ));
+            } else if parse_across(value).is_ok() {
+                diagnostics.push(suggestion_diag(
+                    Code::ParseUnknown,
+                    "unknown phrase",
+                    line,
+                    trimmed,
+                    None,
+                    Suggestion {
+                        auto: true,
+                        replacement: format!("across {value}"),
+                        command: String::new(),
+                    },
+                ));
+            }
+        }
+        if token == "on" || matches!(match_phrase(token), Match::One("on")) {
+            if let Ok(shape) = parse_on(value) {
+                if let Some(suggestion) = shape_suggestion(&shape, pool) {
+                    diagnostics.push(suggestion_diag(
+                        Code::PoolShape,
+                        format!("each reserved node has {} {}", pool_gpus(pool, &shape.kind), shape.kind),
+                        line,
+                        trimmed,
+                        None,
+                        suggestion,
+                    ));
+                }
+            }
+        }
+    }
+    diagnostics
+}
+
+pub fn apply_auto(path: &std::path::Path, pool: &[PoolMachine]) -> ApplyOutcome {
+    let original = std::fs::read_to_string(path).unwrap_or_default();
+    let first = suggestions_for(&original, pool);
+    let mut text = original;
+    for diagnostic in &first {
+        for suggestion in &diagnostic.suggestions {
+            if !suggestion.auto {
+                continue;
+            }
+            if suggestion.replacement.is_empty() {
+                text = text
+                    .lines()
+                    .filter(|line| line.trim() != diagnostic.span.text.trim())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+            } else if let Some(start) = text.find(&diagnostic.span.text) {
+                let end = start + diagnostic.span.text.len();
+                text.replace_range(start..end, &suggestion.replacement);
+            }
+        }
+    }
+    let _ = std::fs::write(path, &text);
+    ApplyOutcome {
+        diagnostics: suggestions_for(&text, pool),
+        submitted: false,
+    }
+}
+
+fn closest_phrase(token: &str) -> Option<&'static str> {
+    let mut best: Vec<&str> = Vec::new();
+    let mut best_distance = usize::MAX;
+    for phrase in PHRASES {
+        let distance = edit_distance(token, phrase);
+        if distance == 0 || distance > 1 {
+            continue;
+        }
+        if distance < best_distance {
+            best_distance = distance;
+            best.clear();
+            best.push(phrase);
+        } else if distance == best_distance {
+            best.push(phrase);
+        }
+    }
+    if best.len() == 1 {
+        Some(best[0])
+    } else {
+        None
+    }
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let left: Vec<char> = left.chars().collect();
+    let right: Vec<char> = right.chars().collect();
+    let mut previous: Vec<usize> = (0..=right.len()).collect();
+    for (i, left_char) in left.iter().enumerate() {
+        let mut current = vec![i + 1];
+        for (j, right_char) in right.iter().enumerate() {
+            let cost = if left_char == right_char { 0 } else { 1 };
+            current.push(
+                (previous[j + 1] + 1)
+                    .min(current[j] + 1)
+                    .min(previous[j] + cost),
+            );
+        }
+        previous = current;
+    }
+    previous[right.len()]
+}
+
+fn shape_suggestion(shape: &GpuShape, pool: &[PoolMachine]) -> Option<Suggestion> {
+    let per_node = pool_gpus(pool, &shape.kind);
+    if per_node == 0 || shape.count <= per_node || shape.count % per_node != 0 {
+        return None;
+    }
+    let wanted = shape.count / per_node;
+    let have = pool
+        .iter()
+        .filter(|machine| machine.kind == shape.kind)
+        .map(|machine| machine.count)
+        .sum::<u32>();
+    if have == 0 {
+        return None;
+    }
+    let (across, auto) = if wanted <= have {
+        (wanted, true)
+    } else {
+        (have, false)
+    };
+    Some(Suggestion {
+        auto,
+        replacement: format!("on {per_node} {}\nacross {across}", shape.kind),
+        command: String::new(),
+    })
+}
+
+fn pool_gpus(pool: &[PoolMachine], kind: &str) -> u32 {
+    pool.iter()
+        .find(|machine| machine.kind == kind)
+        .map(|machine| machine.gpus)
+        .unwrap_or(0)
+}
+
+fn suggestion_diag(
+    code: Code,
+    message: impl Into<String>,
+    line: usize,
+    text: &str,
+    note: Option<String>,
+    suggestion: Suggestion,
+) -> Diagnostic {
+    Diagnostic {
+        code,
+        severity: Severity::Error,
+        message: message.into(),
+        span: Span {
+            file: String::new(),
+            line,
+            column: 1,
+            text: text.to_string(),
+            label: None,
+        },
+        notes: note.into_iter().collect(),
+        suggestions: vec![suggestion],
+    }
+}
+
+pub fn check_local_layers(klugefile: &str, file: &str, cli: &str) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let base = match lex_layer(klugefile, &mut diagnostics) {
+        Some(phrases) => phrases,
+        None => return diagnostics,
+    };
+    let file_phrases = match lex_layer(file, &mut diagnostics) {
+        Some(phrases) => phrases,
+        None => return diagnostics,
+    };
+    let cli_phrases = match lex_layer(cli, &mut diagnostics) {
+        Some(phrases) => phrases,
+        None => return diagnostics,
+    };
+    if !diagnostics.is_empty() {
+        return diagnostics;
+    }
+    match resolve(&base, &file_phrases, &cli_phrases) {
+        Err(ResolveError::MissingRun) => diagnostics.push(plain(Code::ParseRun, "run is missing", 1, "run")),
+        Err(ResolveError::Value { phrase: "for" }) => {
+            diagnostics.push(plain(Code::ParseDuration, "for did not parse", 1, "for"))
+        }
+        Err(ResolveError::Value { phrase }) => {
+            diagnostics.push(plain(Code::ParseUnknown, "value is not valid", 1, phrase))
+        }
+        Ok(spec) => {
+            if spec.duration.is_none() {
+                diagnostics.push(plain(Code::ParseDuration, "for is missing", 1, "for"));
+            }
+            if spec.run.len() == 1 && is_local_script(&spec.run[0]) && !std::path::Path::new(&spec.run[0]).is_file()
+            {
+                diagnostics.push(plain(
+                    Code::ParseRun,
+                    "local script does not exist",
+                    1,
+                    spec.run[0].clone(),
+                ));
+            }
+        }
+    }
+    diagnostics
+}
+
+pub fn check_local_sbatch(text: &str) -> Vec<Diagnostic> {
+    match read_sbatch(text) {
+        Err(error) => vec![plain(Code::ParseSbatch, "directive has no translation", error.line, error.text)],
+        Ok(spec) => {
+            let mut diagnostics = Vec::new();
+            if spec.duration.is_none() {
+                diagnostics.push(plain(Code::ParseDuration, "for is missing", 1, "for"));
+            }
+            diagnostics
+        }
+    }
+}
+
+fn lex_layer(text: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<Vec<Phrase>> {
+    match lex(text) {
+        Ok(phrases) => Some(phrases),
+        Err(LexError::Unknown { line, token }) => {
+            diagnostics.push(plain(Code::ParseUnknown, "unknown phrase", line, token));
+            None
+        }
+        Err(LexError::Ambiguous { line, names }) => {
+            diagnostics.push(plain(
+                Code::ParseAmbiguous,
+                format!("matches {}", names.join(", ")),
+                line,
+                names.join(" "),
+            ));
+            None
+        }
+        Err(LexError::Duplicate {
+            phrase,
+            first_line,
+            second_line,
+        }) => {
+            diagnostics.push(plain(
+                Code::ParseDuplicate,
+                format!("{phrase} is set on lines {first_line} and {second_line}"),
+                second_line,
+                phrase,
+            ));
+            None
+        }
+    }
+}
+
+fn is_local_script(token: &str) -> bool {
+    token.starts_with("./") || token.starts_with('/') || token.starts_with("../")
+}
+
+fn plain(code: Code, message: impl Into<String>, line: usize, text: impl Into<String>) -> Diagnostic {
+    Diagnostic {
+        code,
+        severity: Severity::Error,
+        message: message.into(),
+        span: Span {
+            file: String::new(),
+            line,
+            column: 1,
+            text: text.into(),
+            label: None,
+        },
+        notes: Vec::new(),
+        suggestions: Vec::new(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Diagnostic {
     pub code: Code,
