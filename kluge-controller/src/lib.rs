@@ -14,6 +14,40 @@ pub struct Admission {
     pub summary: String,
 }
 
+pub fn handle_check(method: &str, body: &str, run: &Run) -> (u16, String) {
+    if method != "POST" {
+        return (400, "not a spec".to_string());
+    }
+    let value: serde_json::Value = match serde_json::from_str(body) {
+        Ok(value) => value,
+        Err(_) => return (400, "not a spec".to_string()),
+    };
+    let Some(text) = value.get("text").and_then(|item| item.as_str()) else {
+        return (400, "not a spec".to_string());
+    };
+    let phrases = match kluge_check::lex(text) {
+        Ok(phrases) => phrases,
+        Err(_) => return (400, "not a spec".to_string()),
+    };
+    let spec = match kluge_check::resolve(&[], &phrases, &[]) {
+        Ok(spec) => spec,
+        Err(_) => return (400, "not a spec".to_string()),
+    };
+    let mut checked = Run {
+        spec,
+        view: run.view.clone(),
+        nodes: run.nodes.clone(),
+        quota: run.quota,
+        fs: run.fs.clone(),
+    };
+    let _ = &mut checked;
+    let decision = admit(&checked);
+    (
+        200,
+        serde_json::to_string(&decision.diagnostics).unwrap_or_else(|_| "[]".to_string()),
+    )
+}
+
 pub struct Store {
     pub created: Vec<String>,
 }
