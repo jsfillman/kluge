@@ -117,9 +117,13 @@ The container command is `bash --noprofile --norc /kluge/script`, and the block 
 - memory
 - time
 - account, mapped to `team`
-- output, mapped to `into`
+- output, mapped to the stdout file
+- error, mapped to the stderr file
+- chdir, mapped to `dir`
+- `signal=B:<sig>@<seconds>`
+- `export=NONE`, and `export=` followed by a comma-separated name list
 
-The script body becomes a block-quoted `run`. Any other `#SBATCH` directive refuses the submit, quotes the line, and prints the sentence it had understood so far. Arrays and dependencies are in that refused set until a spec adds them.
+The script body becomes a block-quoted `run`. Any other `#SBATCH` directive refuses the submit, quotes the line, and prints the sentence it had understood so far. Arrays, dependencies, and `--export=ALL` are in that refused set. `--export=ALL` explains that the container starts clean.
 
 ## Abbreviations beyond the grammar
 
