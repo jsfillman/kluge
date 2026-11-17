@@ -87,7 +87,24 @@ run torchrun train.py --epochs 10
 
 `kluge run ablation.kluge` reads it. `kluge run train.py on 8 h100` is a command whose `run` phrase is `train.py`. Extra phrases on that command line add to it.
 
-`#` starts a comment. Blank lines are ignored. The `run` phrase is the argv of the container, not a shell string. Kluge does not wrap it in `sh -c`.
+`#` starts a comment. Blank lines are ignored. A one-line `run` is the argv of the container. Kluge does not wrap that line in a shell.
+
+A block-quoted `run` is a script. Triple quotes open it, and a line that is only `"""` closes it. Inside the block, `#` is script text and blank lines are kept. The file is not TOML and not YAML. The quotes are only the script delimiter.
+
+```text
+name train
+on 8 h100
+across 4
+for 6 hours
+
+run """
+module load cuda
+source ~/env.sh
+torchrun --nnodes=4 train.py
+"""
+```
+
+The container command is `bash --noprofile --norc /kluge/script`, and the block is that file. A missing close quote is a parse error. An `#SBATCH` body is the same kind of script: the known headers become phrases, and the body is not split into argv.
 
 ## `#SBATCH`
 
@@ -102,7 +119,7 @@ run torchrun train.py --epochs 10
 - account, mapped to `team`
 - output, mapped to `into`
 
-The script body becomes `run`. Any other `#SBATCH` directive refuses the submit, quotes the line, and prints the sentence it had understood so far. Arrays and dependencies are in that refused set until a spec adds them.
+The script body becomes a block-quoted `run`. Any other `#SBATCH` directive refuses the submit, quotes the line, and prints the sentence it had understood so far. Arrays and dependencies are in that refused set until a spec adds them.
 
 ## Abbreviations beyond the grammar
 

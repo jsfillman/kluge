@@ -39,6 +39,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E10-T2](E10-T2.md) | done | E10-T1 | View model, no window |
 | [E10-T3](E10-T3.md) | blocked-on-display | E10-T2 | Menu-bar shell |
 | [E11-T1](E11-T1.md) | done | E3-T1, E2-T3 | The binary speaks the sentence |
+| [E11-T2](E11-T2.md) | open | E1-T6, E11-T1 | Block-quoted scripts |
 
 ## Epics
 
@@ -55,4 +56,4 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E8 Wire-up](epics/E8.md) | E8-T1 … E8-T3 | CLI and check endpoint exist |
 | [E9 Daily verbs](epics/E9.md) | E9-T1 … E9-T3 | Submit works against a fake API |
 | [E10 Desktop](epics/E10.md) | E10-T1 … E10-T3 | The daily verbs exist. Not the core |
-| [E11 The sentence](epics/E11.md) | E11-T1 | The binary speaks it |
+| [E11 The sentence](epics/E11.md) | E11-T1, E11-T2 | The binary speaks it. E11-T2 is a script block |
