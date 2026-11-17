@@ -19,6 +19,9 @@ dependencies = [
 [[package]]
 name = "kluge-cli"
 version = "0.1.0"
+dependencies = [
+ "kluge-check",
+]
 
 [[package]]
 name = "kluge-controller"
