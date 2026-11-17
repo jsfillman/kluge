@@ -24,7 +24,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E4-T2](E4-T2.md) | done | E4-T1 | Fixed pod template |
 | [E5-T1](E5-T1.md) | done | E2-T1, E4-T1 | Pool checks |
 | [E5-T2](E5-T2.md) | done | E5-T1 | Path checks |
-| [E5-T3](E5-T3.md) | open | E5-T1 | Image, name, and auth |
+| [E5-T3](E5-T3.md) | done | E5-T1 | Image, name, and auth |
 | [E6-T1](E6-T1.md) | open | E5-T3 | Admission uses `kluge-check` |
 | [E6-T2](E6-T2.md) | open | E4-T2, E6-T1 | Reconcile a `Run` to a Job |
 | [E6-T3](E6-T3.md) | open | E6-T1 | Check endpoint |

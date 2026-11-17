@@ -3,6 +3,87 @@ pub fn crate_name() -> &'static str {
 }
 
 #[derive(Debug, Clone)]
+pub struct AdmitView {
+    pub allow: Vec<String>,
+    pub require_digest: bool,
+    pub pull_ok: bool,
+    pub live_names: Vec<String>,
+    pub teams: Vec<String>,
+    pub caller: Option<String>,
+    pub max_wall_secs: u64,
+}
+
+pub fn check_admit(spec: &Spec, view: &AdmitView) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    if view.caller.is_none() {
+        diagnostics.push(plain(Code::AuthIdentity, "caller is not authenticated", 1, "team"));
+    }
+    if let Some(team) = &spec.team {
+        if !view.teams.iter().any(|allowed| allowed == team) {
+            diagnostics.push(plain(Code::AuthTeam, "caller cannot charge this team", 1, team));
+        }
+    }
+    if let Some(name) = &spec.name {
+        if !valid_name(name) {
+            diagnostics.push(plain(Code::NameSyntax, "name does not match the pattern", 1, name));
+        } else if view.live_names.iter().any(|live| live == name) {
+            diagnostics.push(suggestion_diag(
+                Code::NameTaken,
+                "a live run already has this name",
+                1,
+                name,
+                None,
+                Suggestion {
+                    auto: false,
+                    replacement: format!("{name}-2"),
+                    command: String::new(),
+                },
+            ));
+        }
+    }
+    if let Some(image) = &spec.image {
+        let allowed = view.allow.iter().any(|prefix| image.starts_with(prefix));
+        let pinned = image.contains('@') || (!image.ends_with(":latest") && image.contains(':'));
+        if !allowed || (view.require_digest && !image.contains('@')) {
+            diagnostics.push(Diagnostic {
+                severity: Severity::Error,
+                ..plain(Code::ImageDenied, "image is not allowed", 1, image)
+            });
+        } else if image.ends_with(":latest") {
+            diagnostics.push(Diagnostic {
+                severity: Severity::Warning,
+                ..plain(Code::ImageDenied, "floating tag", 1, image)
+            });
+        }
+        if !view.pull_ok {
+            diagnostics.push(plain(Code::ImagePull, "the cluster cannot pull the image", 1, image));
+        }
+        let _ = pinned;
+    }
+    if let Some(duration) = spec.duration {
+        if duration.as_secs() > view.max_wall_secs {
+            diagnostics.push(plain(
+                Code::TimeCeiling,
+                format!("for exceeds the ceiling of {} seconds", view.max_wall_secs),
+                1,
+                "for",
+            ));
+        }
+    }
+    diagnostics
+}
+
+fn valid_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_lowercase()
+        && name.len() <= 63
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+#[derive(Debug, Clone)]
 pub struct FsView {
     pub root: String,
     pub existing: Vec<String>,
