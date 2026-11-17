@@ -26,7 +26,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E5-T2](E5-T2.md) | done | E5-T1 | Path checks |
 | [E5-T3](E5-T3.md) | done | E5-T1 | Image, name, and auth |
 | [E6-T1](E6-T1.md) | done | E5-T3 | Admission uses `kluge-check` |
-| [E6-T2](E6-T2.md) | open | E4-T2, E6-T1 | Reconcile a `Run` to a Job |
+| [E6-T2](E6-T2.md) | done | E4-T2, E6-T1 | Reconcile a `Run` to a Job |
 | [E6-T3](E6-T3.md) | open | E6-T1 | Check endpoint |
 | [E7-T1](E7-T1.md) | open | E6-T2 | Helm chart |
 | [E8-T1](E8-T1.md) | open | E3-T2, E6-T3 | Submit and dry-run |

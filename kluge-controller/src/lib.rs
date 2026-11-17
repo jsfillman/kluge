@@ -14,6 +14,25 @@ pub struct Admission {
     pub summary: String,
 }
 
+pub struct Store {
+    pub created: Vec<String>,
+}
+
+pub fn reconcile(run: &Run, store: &mut Store) {
+    if !admit(run).accepted {
+        return;
+    }
+    let name = run.spec.name.clone().unwrap_or_else(|| "kluge".to_string());
+    if store
+        .created
+        .iter()
+        .any(|yaml| yaml.contains(&format!("name: {name}")))
+    {
+        return;
+    }
+    store.created.push(kluge_check::render_workload(&run.spec));
+}
+
 pub fn admit(run: &Run) -> Admission {
     let mut diagnostics = Vec::new();
     diagnostics.extend(kluge_check::check_pool(&run.spec, &run.nodes, run.quota));
