@@ -1,0 +1,9 @@
+pool:
+  gpu: h100
+team:
+  root: /scratch/kernel-search
+  maxWall: 8h
+  maxGpus: 8
+image:
+  allow: []
+  requireDigest: false
