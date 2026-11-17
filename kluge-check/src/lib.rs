@@ -2,6 +2,27 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+pub fn select_outputs(into: &str, files: &[String]) -> (Vec<String>, Vec<Diagnostic>) {
+    let mut kept = Vec::new();
+    let mut diagnostics = Vec::new();
+    let prefix = format!("{}/", into.trim_end_matches('/'));
+    for file in files {
+        if file.split('/').any(|part| part == "..") {
+            diagnostics.push(plain(
+                Code::PathEscape,
+                "output path leaves into",
+                1,
+                file,
+            ));
+            continue;
+        }
+        if file == into || file.starts_with(&prefix) {
+            kept.push(file.clone());
+        }
+    }
+    (kept, diagnostics)
+}
+
 #[derive(Debug, Clone)]
 pub struct AdmitView {
     pub allow: Vec<String>,
