@@ -1,0 +1,41 @@
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: ablation
+spec:
+  replicatedJobs:
+  - name: workers
+    replicas: 4
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        activeDeadlineSeconds: 3600
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: kluge
+              image: registry.example.com/train:latest
+              workingDir: /scratch/kernel-search
+              command:
+              - train.py
+              env:
+              - name: NCCL_DEBUG
+                value: INFO
+              resources:
+                requests:
+                  cpu: "4"
+                  memory: 16G
+                  nvidia.com/gpu: "8"
+                limits:
+                  cpu: "4"
+                  memory: 16G
+                  nvidia.com/gpu: "8"
+              volumeMounts:
+              - name: team
+                mountPath: /scratch/kernel-search
+            volumes:
+            - name: team
+              persistentVolumeClaim:
+                claimName: team

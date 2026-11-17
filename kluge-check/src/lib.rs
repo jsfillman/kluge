@@ -2,6 +2,74 @@ pub fn crate_name() -> &'static str {
     "kluge-check"
 }
 
+pub fn render_workload(spec: &Spec) -> String {
+    let name = spec.name.as_deref().unwrap_or("kluge");
+    let deadline = spec.duration.map(|d| d.as_secs()).unwrap_or(0);
+    let pod = pod_template(spec, if spec.across <= 1 { 6 } else { 12 });
+    if spec.across <= 1 {
+        format!(
+            "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: {name}\nspec:\n  activeDeadlineSeconds: {deadline}\n  template:\n    spec:\n{pod}"
+        )
+    } else {
+        format!(
+            "apiVersion: jobset.x-k8s.io/v1alpha2\nkind: JobSet\nmetadata:\n  name: {name}\nspec:\n  replicatedJobs:\n  - name: workers\n    replicas: {}\n    template:\n      spec:\n        parallelism: 1\n        completions: 1\n        activeDeadlineSeconds: {deadline}\n        template:\n          spec:\n{pod}",
+            spec.across
+        )
+    }
+}
+
+fn pod_template(spec: &Spec, indent: usize) -> String {
+    let i = " ".repeat(indent);
+    let i2 = " ".repeat(indent + 2);
+    let i4 = " ".repeat(indent + 4);
+    let i6 = " ".repeat(indent + 6);
+    let image = spec.image.as_deref().unwrap_or("");
+    let dir = spec.dir.as_deref().unwrap_or("");
+    let gpus = spec.on.as_ref().map(|on| on.count).unwrap_or(0);
+    let mut body = String::new();
+    body.push_str(&format!("{i}restartPolicy: Never\n"));
+    body.push_str(&format!("{i}containers:\n"));
+    body.push_str(&format!("{i}- name: kluge\n"));
+    body.push_str(&format!("{i2}image: {image}\n"));
+    body.push_str(&format!("{i2}workingDir: {dir}\n"));
+    body.push_str(&format!("{i2}command:\n"));
+    for arg in &spec.run {
+        body.push_str(&format!("{i2}- {arg}\n"));
+    }
+    if !spec.with.is_empty() {
+        body.push_str(&format!("{i2}env:\n"));
+        for (key, value) in &spec.with {
+            body.push_str(&format!("{i2}- name: {key}\n"));
+            body.push_str(&format!("{i4}value: {value}\n"));
+        }
+    }
+    body.push_str(&format!("{i2}resources:\n"));
+    body.push_str(&format!("{i4}requests:\n"));
+    if let Some(cpu) = &spec.cpus {
+        body.push_str(&format!("{i6}cpu: \"{cpu}\"\n"));
+    }
+    if let Some(memory) = &spec.memory {
+        body.push_str(&format!("{i6}memory: {memory}\n"));
+    }
+    body.push_str(&format!("{i6}nvidia.com/gpu: \"{gpus}\"\n"));
+    body.push_str(&format!("{i4}limits:\n"));
+    if let Some(cpu) = &spec.cpus {
+        body.push_str(&format!("{i6}cpu: \"{cpu}\"\n"));
+    }
+    if let Some(memory) = &spec.memory {
+        body.push_str(&format!("{i6}memory: {memory}\n"));
+    }
+    body.push_str(&format!("{i6}nvidia.com/gpu: \"{gpus}\"\n"));
+    body.push_str(&format!("{i2}volumeMounts:\n"));
+    body.push_str(&format!("{i2}- name: team\n"));
+    body.push_str(&format!("{i4}mountPath: {dir}\n"));
+    body.push_str(&format!("{i}volumes:\n"));
+    body.push_str(&format!("{i}- name: team\n"));
+    body.push_str(&format!("{i2}persistentVolumeClaim:\n"));
+    body.push_str(&format!("{i4}claimName: team\n"));
+    body
+}
+
 #[derive(Debug, Clone)]
 pub struct PoolMachine {
     pub kind: String,
