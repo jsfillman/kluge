@@ -1,5 +1,27 @@
 use kluge_check::{lex, match_phrase, match_verb, read_sbatch, resolve, Match, Phrase, Spec};
 
+pub struct WatchModel {
+    pub rows: Vec<String>,
+    pub detached: bool,
+    pub cancelled: bool,
+}
+
+impl WatchModel {
+    pub fn new(rows: Vec<String>) -> Self {
+        Self {
+            rows,
+            detached: false,
+            cancelled: false,
+        }
+    }
+    pub fn press_q(&mut self) {
+        self.detached = true;
+    }
+    pub fn render(&self) -> String {
+        self.rows.join("\n")
+    }
+}
+
 pub fn complete(
     previous: &[String],
     files: &[String],
@@ -50,6 +72,9 @@ pub trait CheckClient {
     }
     fn cancel(&self, _name: &str) -> Result<(), String> {
         Ok(())
+    }
+    fn explain(&self, name: &str) -> Result<kluge_check::Diagnostic, String> {
+        Err(format!("unknown run {name}"))
     }
 }
 
@@ -148,6 +173,7 @@ fn dispatch_read(args: &[String], client: &dyn CheckClient) -> Option<(i32, Stri
         Match::One("status") => Some(show_status(args.get(2).map(String::as_str), client)),
         Match::One("logs") => Some(show_logs(args.get(2).map(String::as_str), client)),
         Match::One("cancel") => Some(cancel_run(args.get(2).map(String::as_str), client)),
+        Match::One("explain") => Some(explain_run(args.get(2).map(String::as_str), client)),
         _ => None,
     }
 }
@@ -181,6 +207,23 @@ fn cancel_run(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
     };
     match client.cancel(name) {
         Ok(()) => (0, name.to_string()),
+        Err(err) => (1, err),
+    }
+}
+
+fn explain_run(name: Option<&str>, client: &dyn CheckClient) -> (i32, String) {
+    let Some(name) = name else {
+        return (1, "explain needs a run".to_string());
+    };
+    match client.explain(name) {
+        Ok(diagnostic) => {
+            let code = if diagnostic.severity == kluge_check::Severity::Error {
+                1
+            } else {
+                0
+            };
+            (code, kluge_check::render(&diagnostic))
+        }
         Err(err) => (1, err),
     }
 }
