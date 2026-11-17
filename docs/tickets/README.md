@@ -40,7 +40,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E10-T2](E10-T2.md) | done | E10-T1 | View model, no window |
 | [E10-T3](E10-T3.md) | blocked-on-display | E10-T2 | Menu-bar shell |
 | [E11-T1](E11-T1.md) | done | E3-T1, E2-T3 | The binary speaks the sentence |
-| [E11-T2](E11-T2.md) | open | E1-T6, E11-T1 | Block-quoted scripts |
+| [E11-T2](E11-T2.md) | done | E1-T6, E11-T1 | Block-quoted scripts |
 
 ## Epics
 

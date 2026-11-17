@@ -41,16 +41,11 @@ fn gres_translates() {
 fn body_is_argv() {
     let script = "#SBATCH --job-name=sample\ntorchrun train.py --epochs 10\n";
     let spec = read_sbatch(script).unwrap();
+    assert!(spec.run.is_empty());
     assert_eq!(
-        spec.run,
-        vec![
-            "torchrun".to_string(),
-            "train.py".to_string(),
-            "--epochs".to_string(),
-            "10".to_string()
-        ]
+        spec.script.as_deref(),
+        Some("torchrun train.py --epochs 10")
     );
-    assert!(!spec.run.iter().any(|arg| arg == "sh"));
 }
 
 #[test]

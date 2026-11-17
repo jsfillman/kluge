@@ -273,8 +273,14 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body.push_str(&format!("{i2}image: {image}\n"));
     body.push_str(&format!("{i2}workingDir: {dir}\n"));
     body.push_str(&format!("{i2}command:\n"));
-    for arg in &spec.run {
-        body.push_str(&format!("{i2}- {arg}\n"));
+    if spec.script.is_some() {
+        for arg in ["bash", "--noprofile", "--norc", "/kluge/script"] {
+            body.push_str(&format!("{i2}- {arg}\n"));
+        }
+    } else {
+        for arg in &spec.run {
+            body.push_str(&format!("{i2}- {arg}\n"));
+        }
     }
     if !spec.with.is_empty() {
         body.push_str(&format!("{i2}env:\n"));
@@ -621,6 +627,10 @@ fn lex_layer(text: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<Vec<Phrase
             ));
             None
         }
+        Err(LexError::Unclosed { line }) => {
+            diagnostics.push(plain(Code::ParseRun, "run block is not closed", line, "\"\"\""));
+            None
+        }
     }
 }
 
@@ -821,6 +831,7 @@ pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
         dir: None,
         cpus: None,
         memory: None,
+        script: None,
         overrides: Vec::new(),
     };
     let mut body = Vec::new();
@@ -843,12 +854,9 @@ pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
         }
         body.push(raw);
     }
-    spec.run = body
-        .join("\n")
-        .split_whitespace()
-        .map(str::to_string)
-        .collect();
-    if spec.run.is_empty() {
+    let script = body.join("\n");
+    if !script.is_empty() {
+        spec.script = Some(script);
         spec.run.clear();
     }
     Ok(spec)
@@ -1020,6 +1028,7 @@ pub struct Spec {
     pub dir: Option<String>,
     pub cpus: Option<String>,
     pub memory: Option<String>,
+    pub script: Option<String>,
     pub overrides: Vec<OverrideNote>,
 }
 
@@ -1047,13 +1056,14 @@ pub fn resolve(
         dir: None,
         cpus: None,
         memory: None,
+        script: None,
         overrides: Vec::new(),
     };
     let mut origin: Vec<(&'static str, Layer)> = Vec::new();
     apply(&mut spec, &mut origin, klugefile, Layer::Klugefile)?;
     apply(&mut spec, &mut origin, file, Layer::File)?;
     apply(&mut spec, &mut origin, cli, Layer::Cli)?;
-    if spec.run.is_empty() {
+    if spec.run.is_empty() && spec.script.is_none() {
         return Err(ResolveError::MissingRun);
     }
     Ok(spec)
@@ -1091,7 +1101,13 @@ fn set_phrase(spec: &mut Spec, phrase: &Phrase) -> Result<(), ResolveError> {
     };
     match phrase.name {
         "run" => {
-            spec.run = phrase.value.split_whitespace().map(str::to_string).collect();
+            if phrase.script {
+                spec.script = Some(phrase.value.clone());
+                spec.run.clear();
+            } else {
+                spec.script = None;
+                spec.run = phrase.value.split_whitespace().map(str::to_string).collect();
+            }
         }
         "on" => spec.on = Some(parse_on(&phrase.value).map_err(|_| bad())?),
         "across" => spec.across = parse_across(&phrase.value).map_err(|_| bad())?,
@@ -1112,6 +1128,7 @@ pub struct Phrase {
     pub line: usize,
     pub name: &'static str,
     pub value: String,
+    pub script: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1123,15 +1140,19 @@ pub enum LexError {
         first_line: usize,
         second_line: usize,
     },
+    Unclosed { line: usize },
 }
 
 pub fn lex(text: &str) -> Result<Vec<Phrase>, LexError> {
+    let lines: Vec<&str> = text.lines().collect();
     let mut phrases = Vec::new();
     let mut seen: Vec<(&'static str, usize)> = Vec::new();
-    for (index, raw) in text.lines().enumerate() {
+    let mut index = 0;
+    while index < lines.len() {
         let line = index + 1;
-        let code = raw.split('#').next().unwrap_or("").trim();
+        let code = lines[index].split('#').next().unwrap_or("").trim();
         if code.is_empty() {
+            index += 1;
             continue;
         }
         let (token, value) = code.split_once(char::is_whitespace).unwrap_or((code, ""));
@@ -1145,21 +1166,54 @@ pub fn lex(text: &str) -> Result<Vec<Phrase>, LexError> {
             }
             Match::Ambiguous(names) => return Err(LexError::Ambiguous { line, names }),
         };
-        if let Some((_, first_line)) = seen.iter().find(|(seen_name, _)| *seen_name == name) {
-            return Err(LexError::Duplicate {
-                phrase: name,
-                first_line: *first_line,
-                second_line: line,
+        if name == "run" && value.trim() == "\"\"\"" {
+            let start = line;
+            index += 1;
+            let mut body = Vec::new();
+            let mut closed = false;
+            while index < lines.len() {
+                if lines[index].trim() == "\"\"\"" {
+                    closed = true;
+                    index += 1;
+                    break;
+                }
+                body.push(lines[index]);
+                index += 1;
+            }
+            if !closed {
+                return Err(LexError::Unclosed { line: start });
+            }
+            remember(&mut seen, name, start)?;
+            phrases.push(Phrase {
+                line: start,
+                name,
+                value: body.join("\n"),
+                script: true,
             });
+            continue;
         }
-        seen.push((name, line));
+        remember(&mut seen, name, line)?;
         phrases.push(Phrase {
             line,
             name,
             value: value.trim().to_string(),
+            script: false,
         });
+        index += 1;
     }
     Ok(phrases)
+}
+
+fn remember(seen: &mut Vec<(&'static str, usize)>, name: &'static str, line: usize) -> Result<(), LexError> {
+    if let Some((_, first_line)) = seen.iter().find(|(seen_name, _)| *seen_name == name) {
+        return Err(LexError::Duplicate {
+            phrase: name,
+            first_line: *first_line,
+            second_line: line,
+        });
+    }
+    seen.push((name, line));
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq)]
