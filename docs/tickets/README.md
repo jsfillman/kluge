@@ -14,7 +14,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E1-T5](E1-T5.md) | done | E1-T4 | Resolved sentence |
 | [E1-T6](E1-T6.md) | done | E1-T5 | `#SBATCH` reader |
 | [E2-T1](E2-T1.md) | done | E1-T1 | Diagnostic JSON |
-| [E2-T2](E2-T2.md) | open | E2-T1 | Text rendering |
+| [E2-T2](E2-T2.md) | done | E2-T1 | Text rendering |
 | [E2-T3](E2-T3.md) | open | E1-T6, E2-T2 | Local checks |
 | [E2-T4](E2-T4.md) | open | E2-T3 | `--fix` |
 | [E3-T1](E3-T1.md) | open | E1-T5 | Argv |

@@ -65,6 +65,8 @@ pub struct Span {
     pub line: usize,
     pub column: usize,
     pub text: String,
+    #[serde(default, skip_serializing)]
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -72,6 +74,63 @@ pub struct Suggestion {
     pub auto: bool,
     pub replacement: String,
     pub command: String,
+}
+
+pub fn render(diagnostic: &Diagnostic) -> String {
+    let code = serde_json::to_value(diagnostic.code)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_default();
+    let severity = match diagnostic.severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+    };
+    let width = diagnostic.span.line.to_string().len().max(2);
+    let gutter = " ".repeat(width);
+    let mut out = String::new();
+    out.push_str(&format!("{severity}[{code}]: {}\n", diagnostic.message));
+    out.push_str(&format!("  --> {}:{}\n", diagnostic.span.file, diagnostic.span.line));
+    out.push_str(&format!("{gutter} |\n"));
+    out.push_str(&format!(
+        "{:>width$} | {}\n",
+        diagnostic.span.line, diagnostic.span.text, width = width
+    ));
+    let caret_at = diagnostic.span.column.saturating_sub(1);
+    let caret_len = diagnostic.span.text.len().saturating_sub(caret_at).max(1);
+    let mut caret = format!("{gutter} | {:>pad$}", "", pad = caret_at);
+    caret.push_str(&"^".repeat(caret_len));
+    if let Some(label) = &diagnostic.span.label {
+        caret.push(' ');
+        caret.push_str(label);
+    }
+    out.push_str(&caret);
+    out.push('\n');
+    for note in &diagnostic.notes {
+        out.push_str(&format!("{gutter} |\n"));
+        out.push_str(&format!("{gutter} = note: {note}\n"));
+    }
+    if let Some(suggestion) = diagnostic.suggestions.first() {
+        out.push_str(&format!("{gutter} |\n"));
+        let mut replacement = suggestion.replacement.split('\n');
+        if let Some(first) = replacement.next() {
+            out.push_str(&format!(
+                "{:>width$} - {}\n",
+                diagnostic.span.line, diagnostic.span.text, width = width
+            ));
+            out.push_str(&format!(
+                "{:>width$} + {first}\n",
+                diagnostic.span.line, width = width
+            ));
+            let mut line = diagnostic.span.line;
+            for extra in replacement {
+                line += 1;
+                out.push_str(&format!("{:>width$} + {extra}\n", line, width = width));
+            }
+        }
+        out.push_str(&format!("{gutter} |\n"));
+        out.push_str(&format!("  kluge run --fix {}\n", diagnostic.span.file));
+    }
+    out
 }
 
 pub fn sample_pool_shape() -> Diagnostic {
@@ -84,6 +143,7 @@ pub fn sample_pool_shape() -> Diagnostic {
             line: 2,
             column: 4,
             text: "on 32 h100".to_string(),
+            label: Some("no machine has this shape".to_string()),
         },
         notes: vec!["32 GPUs is 4 machines of 8".to_string()],
         suggestions: vec![Suggestion {
