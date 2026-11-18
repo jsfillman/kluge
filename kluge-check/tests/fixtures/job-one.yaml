@@ -62,6 +62,9 @@ spec:
           mountPath: /scratch/kernel-search
         - name: dshm
           mountPath: /dev/shm
+        - name: kluge-files
+          mountPath: /kluge/hosts
+          subPath: hosts
       nodeSelector:
         kluge.dev/gpu: h100
       tolerations:
@@ -77,3 +80,14 @@ spec:
         emptyDir:
           medium: Memory
           sizeLimit: 8Gi
+      - name: kluge-files
+        configMap:
+          name: ablation-kluge
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ablation-kluge
+data:
+  hosts: |
+    ablation-0

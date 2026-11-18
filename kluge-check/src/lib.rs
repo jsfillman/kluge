@@ -246,7 +246,7 @@ pub fn render_workload(spec: &Spec) -> String {
     let name = spec.name.as_deref().unwrap_or("kluge");
     let deadline = spec.duration.map(|d| d.as_secs()).unwrap_or(0);
     let pod = pod_template(spec, if spec.across <= 1 { 6 } else { 12 });
-    if spec.across <= 1 {
+    let job = if spec.across <= 1 {
         format!(
             "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: {name}\nspec:\n  activeDeadlineSeconds: {deadline}\n  template:\n    spec:\n{pod}"
         )
@@ -255,7 +255,8 @@ pub fn render_workload(spec: &Spec) -> String {
             "apiVersion: jobset.x-k8s.io/v1alpha2\nkind: JobSet\nmetadata:\n  name: {name}\nspec:\n  replicatedJobs:\n  - name: workers\n    replicas: {}\n    template:\n      spec:\n        parallelism: 1\n        completions: 1\n        activeDeadlineSeconds: {deadline}\n        template:\n          spec:\n{pod}",
             spec.across
         )
-    }
+    };
+    format!("{job}---\n{}", render_configmap(spec))
 }
 
 fn pod_template(spec: &Spec, indent: usize) -> String {
@@ -323,6 +324,11 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body.push_str(&format!("{i4}mountPath: {dir}\n"));
     body.push_str(&format!("{i2}- name: dshm\n"));
     body.push_str(&format!("{i4}mountPath: /dev/shm\n"));
+    for (path, key) in file_mounts(spec) {
+        body.push_str(&format!("{i2}- name: kluge-files\n"));
+        body.push_str(&format!("{i4}mountPath: {path}\n"));
+        body.push_str(&format!("{i4}subPath: {key}\n"));
+    }
     if let Some(on) = &spec.on {
         if !on.kind.is_empty() {
             body.push_str(&format!("{i}nodeSelector:\n"));
@@ -342,7 +348,50 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body.push_str(&format!("{i2}emptyDir:\n"));
     body.push_str(&format!("{i4}medium: Memory\n"));
     body.push_str(&format!("{i4}sizeLimit: {shm}\n"));
+    body.push_str(&format!("{i}- name: kluge-files\n"));
+    body.push_str(&format!("{i2}configMap:\n"));
+    body.push_str(&format!(
+        "{i4}name: {}-kluge\n",
+        spec.name.as_deref().unwrap_or("kluge")
+    ));
     body
+}
+
+fn file_mounts(spec: &Spec) -> Vec<(&'static str, &'static str)> {
+    let mut mounts = vec![("/kluge/hosts", "hosts")];
+    if spec.script.is_some() {
+        mounts.push(("/kluge/script", "script"));
+    }
+    mounts
+}
+
+fn render_configmap(spec: &Spec) -> String {
+    let name = spec.name.as_deref().unwrap_or("kluge");
+    let mut data = String::new();
+    data.push_str("  hosts: ");
+    data.push_str(&block_scalar(&hosts_text(name, spec.across)));
+    if let Some(script) = &spec.script {
+        data.push_str("  script: ");
+        data.push_str(&block_scalar(script));
+    }
+    format!("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {name}-kluge\ndata:\n{data}")
+}
+
+fn hosts_text(name: &str, across: u32) -> String {
+    (0..across.max(1))
+        .map(|index| format!("{name}-{index}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn block_scalar(body: &str) -> String {
+    let mut out = String::from("|\n");
+    for line in body.split('\n') {
+        out.push_str("    ");
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
 }
 
 fn push_env(body: &mut String, i2: &str, i4: &str, key: &str, value: &str) {
