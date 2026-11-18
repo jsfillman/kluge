@@ -7,3 +7,5 @@ team:
 image:
   allow: []
   requireDigest: false
+webhook:
+  caBundle: ""
