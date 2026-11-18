@@ -38,7 +38,7 @@ Kluge is a namespace, a queue, and a controller on stock Kubernetes. The reserve
 helm install kluge ./deploy/kluge
 ```
 
-The chart is part of the design, not of this tree yet.
+The chart is [`deploy/kluge`](deploy/kluge).
 
 ## Specs
 

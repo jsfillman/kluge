@@ -41,6 +41,18 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E10-T3](E10-T3.md) | blocked-on-display | E10-T2 | Menu-bar shell |
 | [E11-T1](E11-T1.md) | done | E3-T1, E2-T3 | The binary speaks the sentence |
 | [E11-T2](E11-T2.md) | done | E1-T6, E11-T1 | Block-quoted scripts |
+| [E12-T1](E12-T1.md) | open | E11-T2 | Repeatable `with` |
+| [E12-T2](E12-T2.md) | open | E12-T1 | Script and hosts files |
+| [E12-T3](E12-T3.md) | open | E12-T2 | Pod index |
+| [E12-T4](E12-T4.md) | open | E12-T3 | Launch, wait, and srun |
+| [E12-T5](E12-T5.md) | open | E12-T4 | Output files, signal, and export |
+| [E12-T6](E12-T6.md) | open | E12-T5 | RDMA request |
+| [E12-T7](E12-T7.md) | open | E12-T6 | Directory of the sbatch file |
+| [E13-T1](E13-T1.md) | open | E12-T7, E6-T3 | Check and admit over HTTP |
+| [E13-T2](E13-T2.md) | open | E13-T1 | Sync |
+| [E13-T3](E13-T3.md) | open | E13-T2, E7-T1 | Chart objects |
+| [E13-T4](E13-T4.md) | open | E13-T1, E11-T1 | The CLI uses the API |
+| [E13-T5](E13-T5.md) | open | E13-T4, E3-T3, E8-T2 | Completion install and Ctrl-C |
 
 ## Epics
 
@@ -58,3 +70,5 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E9 Daily verbs](epics/E9.md) | E9-T1 … E9-T3 | Submit works against a fake API |
 | [E10 Desktop](epics/E10.md) | E10-T1 … E10-T3 | The daily verbs exist. Not the core |
 | [E11 The sentence](epics/E11.md) | E11-T1, E11-T2 | The binary speaks it. E11-T2 is a script block |
+| [E12 The pod](epics/E12.md) | E12-T1 … E12-T7 | The rendered YAML contains the files and the indexes |
+| [E13 The API](epics/E13.md) | E13-T1 … E13-T5 | Localhost API. E8-T3 and E10-T3 stay blocked |

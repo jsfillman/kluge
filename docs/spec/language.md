@@ -41,7 +41,7 @@ Phrases have their own prefix tree. `a` is `attach` after `kluge`, and `across` 
 | `u` | `use` | Container image |
 | `n` | `name` | Run name |
 | `i` | `into` | Output directory |
-| `w` | `with` | One `KEY=VAL`. Repeatable |
+| `w` | `with` | One `KEY=VAL`. Repeatable in a layer. A later layer that sets `with` replaces the earlier pairs |
 | `t` | `team` | The account that is charged. Slurm's account maps here |
 | `d` | `dir` | Working directory on the shared filesystem |
 
@@ -134,7 +134,7 @@ GPU types and run names use the same prefix rule.
 
 ## Completion
 
-`kluge completion install` registers bash, zsh, and fish. The completer is the Kluge binary, so the grammar and the cluster cannot drift apart from a hand-written script.
+`kluge completion install` writes `~/.kluge/completion.bash`, `~/.kluge/completion.zsh`, and `~/.kluge/completion.fish`. The completer is the Kluge binary, so the grammar and the cluster cannot drift apart from a hand-written script.
 
 - After `kluge`, the verbs.
 - After `run`, local scripts, `*.kluge`, `*.sbatch`, and `Klugefile` phrases.
