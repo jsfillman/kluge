@@ -68,18 +68,87 @@ pub fn reconcile(run: &Run, store: &mut Store) {
     store.created.push(kluge_check::render_workload(&run.spec));
 }
 
-pub fn serve(context: Run) -> std::io::Result<std::net::SocketAddr> {
+#[derive(Default)]
+pub struct MemoryCluster {
+    pub created: Vec<String>,
+    pub deleted: Vec<String>,
+}
+
+pub struct StoredRun {
+    pub name: String,
+    pub yaml: String,
+    pub log: String,
+    pub deleted: bool,
+}
+
+pub struct State {
+    pub context: Run,
+    pub runs: Vec<StoredRun>,
+    pub cluster: MemoryCluster,
+}
+
+pub struct Handle {
+    pub addr: std::net::SocketAddr,
+    pub state: std::sync::Arc<std::sync::Mutex<State>>,
+}
+
+pub struct HttpCluster {
+    pub base: String,
+}
+
+impl HttpCluster {
+    pub fn create(&self, yaml: &str) -> Result<(), String> {
+        for doc in yaml.split("\n---\n") {
+            let path = if doc.contains("kind: JobSet") {
+                "/apis/jobset.x-k8s.io/v1alpha2/namespaces/kluge/jobsets"
+            } else if doc.contains("kind: ConfigMap") {
+                "/api/v1/namespaces/kluge/configmaps"
+            } else {
+                "/apis/batch/v1/namespaces/kluge/jobs"
+            };
+            post_text(&self.base, path, doc)?;
+        }
+        Ok(())
+    }
+}
+
+pub fn sync(run: &Run, cluster: &mut MemoryCluster) -> bool {
+    if !admit(run).accepted {
+        return false;
+    }
+    let name = run.spec.name.clone().unwrap_or_else(|| "kluge".to_string());
+    let marker = format!("name: {name}\n");
+    if cluster.created.iter().any(|yaml| yaml.contains(&marker)) {
+        return true;
+    }
+    cluster
+        .created
+        .push(kluge_check::render_workload(&run.spec));
+    let _ = name;
+    true
+}
+
+pub fn open(context: Run) -> std::io::Result<Handle> {
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     let addr = listener.local_addr()?;
-    let context = std::sync::Arc::new(std::sync::Mutex::new(context));
+    let state = std::sync::Arc::new(std::sync::Mutex::new(State {
+        context,
+        runs: Vec::new(),
+        cluster: MemoryCluster::default(),
+    }));
+    let shared = std::sync::Arc::clone(&state);
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             if let Ok(mut stream) = stream {
-                let context = std::sync::Arc::clone(&context);
+                let shared = std::sync::Arc::clone(&shared);
                 let _ = std::thread::spawn(move || {
                     if let Some((method, path, body)) = read_http(&mut stream) {
-                        let (status, response) = dispatch(&method, &path, &body, &context);
-                        let reason = if status == 200 { "OK" } else { "Bad Request" };
+                        let (status, response) = dispatch(&method, &path, &body, &shared);
+                        let reason = match status {
+                            200 => "OK",
+                            404 => "Not Found",
+                            _ => "Bad Request",
+                        };
                         let raw = format!(
                             "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
                             response.len()
@@ -90,21 +159,97 @@ pub fn serve(context: Run) -> std::io::Result<std::net::SocketAddr> {
             }
         }
     });
-    Ok(addr)
+    Ok(Handle { addr, state })
+}
+
+pub fn serve(context: Run) -> std::io::Result<std::net::SocketAddr> {
+    Ok(open(context)?.addr)
 }
 
 fn dispatch(
     method: &str,
     path: &str,
     body: &str,
-    context: &std::sync::Mutex<Run>,
+    state: &std::sync::Mutex<State>,
 ) -> (u16, String) {
-    let context = context.lock().expect("run context");
+    let mut state = state.lock().expect("api state");
     match (method, path) {
-        ("POST", "/check") => handle_check(method, body, &context),
-        ("POST", "/admit") => admit_review(body, &context),
+        ("POST", "/check") => handle_check(method, body, &state.context),
+        ("POST", "/admit") => admit_review(body, &state.context),
+        ("POST", "/runs") => post_run(body, &mut state),
+        ("GET", "/runs") => (
+            200,
+            state
+                .runs
+                .iter()
+                .filter(|run| !run.deleted)
+                .map(|run| run.name.clone())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+        ("GET", path) if path.starts_with("/runs/") && path.ends_with("/logs") => {
+            let name = &path["/runs/".len()..path.len() - "/logs".len()];
+            match state.runs.iter().find(|run| run.name == name) {
+                Some(run) => (200, run.log.clone()),
+                None => (404, String::new()),
+            }
+        }
+        ("DELETE", path) if path.starts_with("/runs/") => {
+            let name = path.trim_start_matches("/runs/").to_string();
+            state.cluster.deleted.push(name.clone());
+            if let Some(run) = state.runs.iter_mut().find(|run| run.name == name) {
+                run.deleted = true;
+            }
+            (200, name)
+        }
         _ => (404, String::new()),
     }
+}
+
+fn post_run(body: &str, state: &mut State) -> (u16, String) {
+    let spec: Spec = match serde_json::from_str(body) {
+        Ok(spec) => spec,
+        Err(err) => return (400, err.to_string()),
+    };
+    let name = spec.name.clone().unwrap_or_else(|| "kluge".to_string());
+    let run = Run {
+        spec,
+        view: state.context.view.clone(),
+        nodes: state.context.nodes.clone(),
+        quota: state.context.quota,
+        fs: state.context.fs.clone(),
+    };
+    if !sync(&run, &mut state.cluster) {
+        let decision = admit(&run);
+        return (
+            400,
+            serde_json::to_string(&decision.diagnostics).unwrap_or_else(|_| "[]".to_string()),
+        );
+    }
+    if !state.runs.iter().any(|item| item.name == name) {
+        let yaml = state.cluster.created.last().cloned().unwrap_or_default();
+        state.runs.push(StoredRun {
+            name: name.clone(),
+            yaml,
+            log: String::new(),
+            deleted: false,
+        });
+    }
+    (200, serde_json::json!({ "name": name }).to_string())
+}
+
+fn post_text(base: &str, path: &str, body: &str) -> Result<(), String> {
+    let host = base.trim_start_matches("http://");
+    let mut stream = std::net::TcpStream::connect(host).map_err(|err| err.to_string())?;
+    let request = format!(
+        "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    use std::io::{Read, Write};
+    Write::write_all(&mut stream, request.as_bytes()).map_err(|err| err.to_string())?;
+    let mut buf = [0u8; 64];
+    let _ = stream.read(&mut buf);
+    Ok(())
 }
 
 fn admit_review(body: &str, context: &Run) -> (u16, String) {

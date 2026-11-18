@@ -1265,25 +1265,26 @@ fn format_duration(duration: std::time::Duration) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Layer {
     Klugefile,
     File,
     Cli,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverrideNote {
     pub phrase: &'static str,
     pub from: Layer,
     pub to: Layer,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Spec {
     pub run: Vec<String>,
     pub on: Option<GpuShape>,
     pub across: u32,
+    #[serde(default, with = "duration_secs")]
     pub duration: Option<std::time::Duration>,
     pub image: Option<String>,
     pub name: Option<String>,
@@ -1300,7 +1301,29 @@ pub struct Spec {
     pub signal_lead: u64,
     pub export_names: Vec<String>,
     pub rdma: Option<String>,
+    #[serde(skip)]
     pub overrides: Vec<OverrideNote>,
+}
+
+mod duration_secs {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S: Serializer>(
+        value: &Option<Duration>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(duration) => serializer.serialize_some(&duration.as_secs()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Duration>, D::Error> {
+        Ok(Option::<u64>::deserialize(deserializer)?.map(Duration::from_secs))
+    }
 }
 
 pub fn request_rdma(spec: &mut Spec, device: Option<&str>) {
@@ -1521,7 +1544,7 @@ fn remember(seen: &mut Vec<(&'static str, usize)>, name: &'static str, line: usi
     Ok(())
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GpuShape {
     pub count: u32,
     pub kind: String,

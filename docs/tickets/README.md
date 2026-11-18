@@ -49,7 +49,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E12-T6](E12-T6.md) | done | E12-T5 | RDMA request |
 | [E12-T7](E12-T7.md) | done | E12-T6 | Directory of the sbatch file |
 | [E13-T1](E13-T1.md) | done | E12-T7, E6-T3 | Check and admit over HTTP |
-| [E13-T2](E13-T2.md) | open | E13-T1 | Sync |
+| [E13-T2](E13-T2.md) | done | E13-T1 | Sync |
 | [E13-T3](E13-T3.md) | open | E13-T2, E7-T1 | Chart objects |
 | [E13-T4](E13-T4.md) | open | E13-T1, E11-T1 | The CLI uses the API |
 | [E13-T5](E13-T5.md) | open | E13-T4, E3-T3, E8-T2 | Completion install and Ctrl-C |
