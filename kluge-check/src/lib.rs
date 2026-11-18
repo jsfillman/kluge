@@ -290,20 +290,18 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     for (key, value) in &spec.with {
         push_env(&mut body, &i2, &i4, key, value);
     }
-    for (key, value) in allocation_env(spec, job, gpus) {
-        push_env(&mut body, &i2, &i4, &key, &value);
-    }
+    write_allocation_env(&mut body, &i2, &i4, spec, job, gpus);
     if let Some(stdout) = &spec.stdout {
-        let expanded = expand_file(stdout, job);
+        let expanded = expand_file(stdout, job, spec.across);
         let stderr = spec
             .stderr
             .as_deref()
-            .map(|path| expand_file(path, job))
+            .map(|path| expand_file(path, job, spec.across))
             .unwrap_or_else(|| expanded.clone());
         push_env(&mut body, &i2, &i4, "KLUGE_STDOUT", &expanded);
         push_env(&mut body, &i2, &i4, "KLUGE_STDERR", &stderr);
     } else if let Some(stderr) = &spec.stderr {
-        let expanded = expand_file(stderr, job);
+        let expanded = expand_file(stderr, job, spec.across);
         push_env(&mut body, &i2, &i4, "KLUGE_STDERR", &expanded);
     }
     body.push_str(&format!("{i2}resources:\n"));
@@ -399,40 +397,58 @@ fn push_env(body: &mut String, i2: &str, i4: &str, key: &str, value: &str) {
     body.push_str(&format!("{i4}value: {value}\n"));
 }
 
-fn allocation_env(spec: &Spec, job: &str, gpus: u32) -> Vec<(String, String)> {
+fn write_allocation_env(body: &mut String, i2: &str, i4: &str, spec: &Spec, job: &str, gpus: u32) {
     let nodes = spec.across.to_string();
     let cpus = spec.cpus.clone().unwrap_or_else(|| "1".to_string());
     let submit = spec.dir.clone().unwrap_or_default();
-    let gpus = gpus.to_string();
+    let index = if spec.across > 1 {
+        None
+    } else {
+        Some("0".to_string())
+    };
     let pairs = [
-        ("SLURM_JOB_ID", job.to_string()),
-        ("SLURM_JOB_NAME", job.to_string()),
-        ("SLURM_NNODES", nodes.clone()),
-        ("SLURM_JOB_NUM_NODES", nodes.clone()),
-        ("SLURM_NODEID", "0".to_string()),
-        ("SLURM_PROCID", "0".to_string()),
-        ("SLURM_LOCALID", "0".to_string()),
-        ("SLURM_NTASKS", nodes.clone()),
-        ("SLURM_CPUS_PER_TASK", cpus),
-        ("SLURM_GPUS_ON_NODE", gpus),
-        ("SLURM_SUBMIT_DIR", submit),
-        ("RANK", "0".to_string()),
-        ("WORLD_SIZE", nodes),
-        ("LOCAL_RANK", "0".to_string()),
-        ("MASTER_ADDR", job.to_string()),
-        ("MASTER_PORT", "29500".to_string()),
+        ("SLURM_JOB_ID", Some(job.to_string())),
+        ("SLURM_JOB_NAME", Some(job.to_string())),
+        ("SLURM_NNODES", Some(nodes.clone())),
+        ("SLURM_JOB_NUM_NODES", Some(nodes.clone())),
+        ("SLURM_NODEID", index.clone()),
+        ("SLURM_PROCID", index.clone()),
+        ("SLURM_LOCALID", index.clone()),
+        ("SLURM_NTASKS", Some(nodes.clone())),
+        ("SLURM_CPUS_PER_TASK", Some(cpus)),
+        ("SLURM_GPUS_ON_NODE", Some(gpus.to_string())),
+        ("SLURM_SUBMIT_DIR", Some(submit)),
+        ("RANK", index.clone()),
+        ("WORLD_SIZE", Some(nodes)),
+        ("LOCAL_RANK", index),
+        ("MASTER_ADDR", Some(format!("{job}-0"))),
+        ("MASTER_PORT", Some("29500".to_string())),
     ];
-    pairs
-        .into_iter()
-        .map(|(key, value)| (key.to_string(), value))
-        .collect()
+    for (key, value) in pairs {
+        match value {
+            Some(value) => push_env(body, i2, i4, key, &value),
+            None => push_index(body, i2, i4, key),
+        }
+    }
 }
 
-fn expand_file(pattern: &str, job: &str) -> String {
+fn push_index(body: &mut String, i2: &str, i4: &str, key: &str) {
+    let i6 = format!("{i4}  ");
+    let i8 = format!("{i6}  ");
+    body.push_str(&format!("{i2}- name: {key}\n"));
+    body.push_str(&format!("{i4}valueFrom:\n"));
+    body.push_str(&format!("{i6}fieldRef:\n"));
+    body.push_str(&format!(
+        "{i8}fieldPath: metadata.labels['jobset.sigs.k8s.io/job-index']\n"
+    ));
+}
+
+fn expand_file(pattern: &str, job: &str, across: u32) -> String {
+    let node = if across > 1 { "$(RANK)" } else { "0" };
     pattern
         .replace("%j", job)
         .replace("%x", job)
-        .replace("%n", "0")
+        .replace("%n", node)
 }
 
 fn shm_size(memory: &str) -> String {

@@ -32,11 +32,17 @@ spec:
               - name: SLURM_JOB_NUM_NODES
                 value: 4
               - name: SLURM_NODEID
-                value: 0
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobset.sigs.k8s.io/job-index']
               - name: SLURM_PROCID
-                value: 0
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobset.sigs.k8s.io/job-index']
               - name: SLURM_LOCALID
-                value: 0
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobset.sigs.k8s.io/job-index']
               - name: SLURM_NTASKS
                 value: 4
               - name: SLURM_CPUS_PER_TASK
@@ -46,13 +52,17 @@ spec:
               - name: SLURM_SUBMIT_DIR
                 value: /scratch/kernel-search
               - name: RANK
-                value: 0
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobset.sigs.k8s.io/job-index']
               - name: WORLD_SIZE
                 value: 4
               - name: LOCAL_RANK
-                value: 0
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobset.sigs.k8s.io/job-index']
               - name: MASTER_ADDR
-                value: ablation
+                value: ablation-0
               - name: MASTER_PORT
                 value: 29500
               resources:

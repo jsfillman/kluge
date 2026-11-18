@@ -45,7 +45,7 @@ spec:
         - name: LOCAL_RANK
           value: 0
         - name: MASTER_ADDR
-          value: ablation
+          value: ablation-0
         - name: MASTER_PORT
           value: 29500
         resources:
