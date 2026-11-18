@@ -85,6 +85,7 @@ pub struct State {
     pub context: Run,
     pub runs: Vec<StoredRun>,
     pub cluster: MemoryCluster,
+    pub apiserver: Option<String>,
 }
 
 pub struct Handle {
@@ -139,6 +140,7 @@ pub fn open_on(bind: &str, context: Run) -> std::io::Result<Handle> {
         context,
         runs: Vec::new(),
         cluster: MemoryCluster::default(),
+        apiserver: None,
     }));
     let shared = std::sync::Arc::clone(&state);
     std::thread::spawn(move || {
@@ -232,6 +234,9 @@ fn post_run(body: &str, state: &mut State) -> (u16, String) {
     }
     if !state.runs.iter().any(|item| item.name == name) {
         let yaml = state.cluster.created.last().cloned().unwrap_or_default();
+        if let Some(base) = state.apiserver.clone() {
+            let _ = HttpCluster { base }.create(&yaml);
+        }
         state.runs.push(StoredRun {
             name: name.clone(),
             yaml,

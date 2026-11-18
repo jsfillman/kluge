@@ -40,6 +40,9 @@ fn main() {
         },
     };
     let handle = open_on(&bind, context).expect("listen");
+    if let Ok(base) = std::env::var("KLUGE_APISERVER") {
+        handle.state.lock().expect("state").apiserver = Some(base);
+    }
     println!("{}", handle.addr);
     std::thread::park();
 }

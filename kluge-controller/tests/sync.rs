@@ -95,6 +95,33 @@ fn refused_run_is_not_stored() {
 }
 
 #[test]
+fn post_run_forwards_to_the_apiserver() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let got = Arc::new(Mutex::new(Vec::new()));
+    let record = got.clone();
+    thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = stream.unwrap();
+            let mut buf = [0u8; 8192];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            record
+                .lock()
+                .unwrap()
+                .push(String::from_utf8_lossy(&buf[..n]).to_string());
+            let _ = stream.write_all(b"HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        }
+    });
+    let handle = open(context(GOOD)).unwrap();
+    handle.state.lock().unwrap().apiserver = Some(format!("http://{addr}"));
+    let spec = serde_json::to_string(&context(GOOD).spec).unwrap();
+    let (status, body) = exchange(handle.addr, "POST", "/runs", &spec);
+    assert_eq!(status, 200, "{body}");
+    let got = got.lock().unwrap();
+    assert!(got.iter().any(|item| item.contains("kind: Job")), "{got:?}");
+}
+
+#[test]
 fn http_cluster_posts_each_document() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
