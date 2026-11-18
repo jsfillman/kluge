@@ -1,0 +1,5 @@
+use registry.example.com/train:latest
+on h100
+for 6 hours
+team kernel-search
+dir /scratch/kernel-search

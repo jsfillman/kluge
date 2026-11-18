@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kluge-controller
+  namespace: kluge
+spec:
+  selector:
+    app: kluge-controller
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

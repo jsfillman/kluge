@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kluge
+description: Researcher front door for a reserved GPU pool
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
