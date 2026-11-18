@@ -129,7 +129,11 @@ pub fn sync(run: &Run, cluster: &mut MemoryCluster) -> bool {
 }
 
 pub fn open(context: Run) -> std::io::Result<Handle> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    open_on("127.0.0.1:0", context)
+}
+
+pub fn open_on(bind: &str, context: Run) -> std::io::Result<Handle> {
+    let listener = std::net::TcpListener::bind(bind)?;
     let addr = listener.local_addr()?;
     let state = std::sync::Arc::new(std::sync::Mutex::new(State {
         context,

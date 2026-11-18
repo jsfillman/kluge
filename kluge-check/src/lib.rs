@@ -40,7 +40,7 @@ pub fn check_admit(spec: &Spec, view: &AdmitView) -> Vec<Diagnostic> {
         diagnostics.push(plain(Code::AuthIdentity, "caller is not authenticated", 1, "team"));
     }
     if let Some(team) = &spec.team {
-        if !view.teams.iter().any(|allowed| allowed == team) {
+        if !view.teams.is_empty() && !view.teams.iter().any(|allowed| allowed == team) {
             diagnostics.push(plain(Code::AuthTeam, "caller cannot charge this team", 1, team));
         }
     }
