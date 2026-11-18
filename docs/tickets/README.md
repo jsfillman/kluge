@@ -46,7 +46,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E12-T3](E12-T3.md) | done | E12-T2 | Pod index |
 | [E12-T4](E12-T4.md) | done | E12-T3 | Launch, wait, and srun |
 | [E12-T5](E12-T5.md) | done | E12-T4 | Output files, signal, and export |
-| [E12-T6](E12-T6.md) | open | E12-T5 | RDMA request |
+| [E12-T6](E12-T6.md) | done | E12-T5 | RDMA request |
 | [E12-T7](E12-T7.md) | open | E12-T6 | Directory of the sbatch file |
 | [E13-T1](E13-T1.md) | open | E12-T7, E6-T3 | Check and admit over HTTP |
 | [E13-T2](E13-T2.md) | open | E13-T1 | Sync |

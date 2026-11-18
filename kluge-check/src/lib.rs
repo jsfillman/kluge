@@ -321,12 +321,18 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     }
     body.push_str(&format!("{i6}memory: {memory}\n"));
     body.push_str(&format!("{i6}nvidia.com/gpu: \"{gpus}\"\n"));
+    if let Some(device) = &spec.rdma {
+        body.push_str(&format!("{i6}{device}: \"1\"\n"));
+    }
     body.push_str(&format!("{i4}limits:\n"));
     if let Some(cpu) = &spec.cpus {
         body.push_str(&format!("{i6}cpu: \"{cpu}\"\n"));
     }
     body.push_str(&format!("{i6}memory: {memory}\n"));
     body.push_str(&format!("{i6}nvidia.com/gpu: \"{gpus}\"\n"));
+    if let Some(device) = &spec.rdma {
+        body.push_str(&format!("{i6}{device}: \"1\"\n"));
+    }
     body.push_str(&format!("{i2}volumeMounts:\n"));
     body.push_str(&format!("{i2}- name: team\n"));
     body.push_str(&format!("{i4}mountPath: {dir}\n"));
@@ -1057,6 +1063,7 @@ pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
         signal: None,
         signal_lead: 0,
         export_names: Vec::new(),
+        rdma: None,
         overrides: Vec::new(),
     };
     let mut body = Vec::new();
@@ -1292,7 +1299,15 @@ pub struct Spec {
     pub signal: Option<String>,
     pub signal_lead: u64,
     pub export_names: Vec<String>,
+    pub rdma: Option<String>,
     pub overrides: Vec<OverrideNote>,
+}
+
+pub fn request_rdma(spec: &mut Spec, device: Option<&str>) {
+    spec.rdma = match device {
+        Some(device) if spec.across > 1 && !device.is_empty() => Some(device.to_string()),
+        _ => None,
+    };
 }
 
 pub fn fill_export(spec: &mut Spec, env: &[(&str, &str)]) {
@@ -1333,6 +1348,7 @@ pub fn resolve(
         signal: None,
         signal_lead: 0,
         export_names: Vec::new(),
+        rdma: None,
         overrides: Vec::new(),
     };
     let mut origin: Vec<(&'static str, Layer)> = Vec::new();
