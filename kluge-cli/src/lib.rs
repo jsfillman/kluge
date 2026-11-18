@@ -97,7 +97,37 @@ pub trait CheckClient {
     }
 }
 
+pub struct LogFollow {
+    pub stop: bool,
+    pub cancelled: bool,
+}
+
+pub fn on_interrupt(follow: &mut LogFollow) {
+    follow.stop = true;
+}
+
+pub fn install_completion(home: &std::path::Path) -> std::io::Result<()> {
+    let dir = home.join(".kluge");
+    std::fs::create_dir_all(&dir)?;
+    for shell in ["bash", "zsh", "fish"] {
+        std::fs::write(
+            dir.join(format!("completion.{shell}")),
+            completion_script(shell),
+        )?;
+    }
+    Ok(())
+}
+
 pub fn main_with(args: &[String], api: Option<&str>) -> (i32, String) {
+    if args.get(1).map(String::as_str) == Some("completion")
+        && args.get(2).map(String::as_str) == Some("install")
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        return match install_completion(std::path::Path::new(&home)) {
+            Ok(()) => (0, String::new()),
+            Err(err) => (1, err.to_string()),
+        };
+    }
     match api {
         Some(base) => main_api(args, base),
         None => main_args(args),
