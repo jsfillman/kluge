@@ -1176,7 +1176,17 @@ fn apply(
     phrases: &[Phrase],
     layer: Layer,
 ) -> Result<(), ResolveError> {
+    let mut with_from_this_layer = false;
     for phrase in phrases {
+        if phrase.name == "with" && !with_from_this_layer {
+            if origin
+                .iter()
+                .any(|(name, from)| *name == "with" && *from != layer)
+            {
+                spec.with.clear();
+            }
+            with_from_this_layer = true;
+        }
         if let Some((_, from)) = origin.iter().find(|(name, _)| *name == phrase.name) {
             if *from != layer {
                 spec.overrides.push(OverrideNote {
@@ -1216,7 +1226,7 @@ fn set_phrase(spec: &mut Spec, phrase: &Phrase) -> Result<(), ResolveError> {
         "use" => spec.image = Some(phrase.value.clone()),
         "name" => spec.name = Some(phrase.value.clone()),
         "into" => spec.into = Some(phrase.value.clone()),
-        "with" => spec.with = vec![parse_with(&phrase.value).map_err(|_| bad())?],
+        "with" => spec.with.push(parse_with(&phrase.value).map_err(|_| bad())?),
         "team" => spec.team = Some(phrase.value.clone()),
         "dir" => spec.dir = Some(phrase.value.clone()),
         _ => {}
@@ -1306,6 +1316,9 @@ pub fn lex(text: &str) -> Result<Vec<Phrase>, LexError> {
 }
 
 fn remember(seen: &mut Vec<(&'static str, usize)>, name: &'static str, line: usize) -> Result<(), LexError> {
+    if name == "with" {
+        return Ok(());
+    }
     if let Some((_, first_line)) = seen.iter().find(|(seen_name, _)| *seen_name == name) {
         return Err(LexError::Duplicate {
             phrase: name,

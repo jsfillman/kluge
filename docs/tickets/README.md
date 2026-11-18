@@ -41,7 +41,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E10-T3](E10-T3.md) | blocked-on-display | E10-T2 | Menu-bar shell |
 | [E11-T1](E11-T1.md) | done | E3-T1, E2-T3 | The binary speaks the sentence |
 | [E11-T2](E11-T2.md) | done | E1-T6, E11-T1 | Block-quoted scripts |
-| [E12-T1](E12-T1.md) | open | E11-T2 | Repeatable `with` |
+| [E12-T1](E12-T1.md) | done | E11-T2 | Repeatable `with` |
 | [E12-T2](E12-T2.md) | open | E12-T1 | Script and hosts files |
 | [E12-T3](E12-T3.md) | open | E12-T2 | Pod index |
 | [E12-T4](E12-T4.md) | open | E12-T3 | Launch, wait, and srun |
