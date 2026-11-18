@@ -150,6 +150,20 @@ GPU types and run names use the same prefix rule.
 
 `kluge status` with no name prints a table. `kluge status NAME` prints one run. `kluge watch` is the TUI over the same information: name, state, GPUs, age, and one line of why a run is waiting. `q` detaches the view.
 
+## Menu bar
+
+`kluge menu` is an exact word, like `completion`. It is not in the prefix tree, so `m` stays free.
+
+The menu is the screen from the view model: status rows, the selected run's explain line, and that run's output file names. It is not a second control path. It has no item that submits, cancels, syncs, or attaches.
+
+- The first line is the title: `kluge` and the number of runs, as in `kluge 2`.
+- Each status row is an item. A selected row is marked with `*`.
+- When the screen has one row, that row starts selected. Otherwise nothing is selected until a row is chosen.
+- Under the selected row, the menu shows the explain line and then each output file name.
+- Choosing a row only changes the selection.
+
+`kluge menu` with no screen prints `kluge 0`. `kluge menu --screen FILE` reads the view-model JSON and prints the menu. The macOS status item uses that text: the first line is the menu-bar title, and each following line is an item. Opening the item does not change a run. A screenshot of that item on a Mac is what closes E10-T3. Building the shell does not.
+
 `kluge debug train.py` is `run` rewritten to `on 1 <type> across 1`, keeping the image and the command. It prints the rewrite.
 
 `--dry-run` resolves and checks, then does not submit. `--json` prints the spec and any diagnostics as data. Human output stays the sentence.

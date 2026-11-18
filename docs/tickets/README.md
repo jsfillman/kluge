@@ -53,6 +53,8 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E13-T3](E13-T3.md) | done | E13-T2, E7-T1 | Chart objects |
 | [E13-T4](E13-T4.md) | done | E13-T1, E11-T1 | The CLI uses the API |
 | [E13-T5](E13-T5.md) | done | E13-T4, E3-T3, E8-T2 | Completion install and Ctrl-C |
+| [E14-T1](E14-T1.md) | open | E10-T2 | Menu layout |
+| [E14-T2](E14-T2.md) | open | E14-T1 | macOS status item |
 
 ## Epics
 
@@ -72,3 +74,4 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E11 The sentence](epics/E11.md) | E11-T1, E11-T2 | The binary speaks it. E11-T2 is a script block |
 | [E12 The pod](epics/E12.md) | E12-T1 … E12-T7 | The rendered YAML contains the files and the indexes |
 | [E13 The API](epics/E13.md) | E13-T1 … E13-T5 | Localhost API. E8-T3 and E10-T3 stay blocked |
+| [E14 Menu bar](epics/E14.md) | E14-T1, E14-T2 | Layout and the Mac shell. E10-T3 stays blocked |

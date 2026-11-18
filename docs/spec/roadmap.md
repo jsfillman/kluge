@@ -27,7 +27,7 @@ The same API, with the rest of the daily verbs.
 
 ## Not the core
 
-Declared output sync and the menu-bar app are specified. They do not make Slurm look obsolete. E10-T3 stays blocked on a display and is not the next piece of work. The core is the sentence in [language](language.md) and the refusal in [checks](checks.md), typed at a real `kluge` binary.
+Declared output sync and the menu-bar app are specified in [language](language.md). They do not make Slurm look obsolete. The menu layout and the macOS shell can be built without a display. E10-T3 stays blocked until a screenshot of that shell is taken on a Mac. The core is the sentence in [language](language.md) and the refusal in [checks](checks.md), typed at a real `kluge` binary.
 
 ## Later, only with a reason
 
