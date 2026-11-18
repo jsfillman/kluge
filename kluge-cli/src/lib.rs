@@ -7,6 +7,70 @@ pub struct Screen {
     pub outputs: Vec<String>,
 }
 
+pub struct Menu {
+    pub screen: Screen,
+    pub selected: Option<usize>,
+}
+
+impl Menu {
+    pub fn from_screen(screen: Screen) -> Self {
+        let selected = if screen.rows.len() == 1 { Some(0) } else { None };
+        Self { screen, selected }
+    }
+
+    pub fn choose(&mut self, index: usize) -> bool {
+        if index < self.screen.rows.len() {
+            self.selected = Some(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn render(&self) -> String {
+        let mut lines = vec![format!("kluge {}", self.screen.rows.len())];
+        for (index, row) in self.screen.rows.iter().enumerate() {
+            let mark = if self.selected == Some(index) { "* " } else { "  " };
+            lines.push(format!("{mark}{row}"));
+            if self.selected == Some(index) {
+                if !self.screen.explain.is_empty() {
+                    lines.push(format!("  {}", self.screen.explain));
+                }
+                for output in &self.screen.outputs {
+                    lines.push(format!("  {output}"));
+                }
+            }
+        }
+        lines.join("\n")
+    }
+}
+
+pub fn menu_from_json(text: &str) -> Result<Menu, String> {
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|err| err.to_string())?;
+    let rows = value["rows"]
+        .as_array()
+        .ok_or_else(|| "rows is missing".to_string())?
+        .iter()
+        .filter_map(|item| item.as_str().map(str::to_string))
+        .collect();
+    let files = value["files"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let screen = screen_from(
+        rows,
+        value["explain"].as_str().unwrap_or(""),
+        value["into"].as_str().unwrap_or(""),
+        &files,
+    );
+    Ok(Menu::from_screen(screen))
+}
+
 pub fn screen_from(rows: Vec<String>, explain: &str, into: &str, files: &[String]) -> Screen {
     let (outputs, _) = kluge_check::select_outputs(into, files);
     Screen {
@@ -119,6 +183,9 @@ pub fn install_completion(home: &std::path::Path) -> std::io::Result<()> {
 }
 
 pub fn main_with(args: &[String], api: Option<&str>) -> (i32, String) {
+    if args.get(1).map(String::as_str) == Some("menu") {
+        return menu_command(args);
+    }
     if args.get(1).map(String::as_str) == Some("completion")
         && args.get(2).map(String::as_str) == Some("install")
     {
@@ -131,6 +198,32 @@ pub fn main_with(args: &[String], api: Option<&str>) -> (i32, String) {
     match api {
         Some(base) => main_api(args, base),
         None => main_args(args),
+    }
+}
+
+fn menu_command(args: &[String]) -> (i32, String) {
+    let screen = args.iter().position(|arg| arg == "--screen");
+    let Some(index) = screen else {
+        return (
+            0,
+            Menu::from_screen(Screen {
+                rows: Vec::new(),
+                explain: String::new(),
+                outputs: Vec::new(),
+            })
+            .render(),
+        );
+    };
+    let Some(path) = args.get(index + 1) else {
+        return (1, "menu needs a screen file".to_string());
+    };
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) => return (1, err.to_string()),
+    };
+    match menu_from_json(&text) {
+        Ok(menu) => (0, menu.render()),
+        Err(err) => (1, err),
     }
 }
 
