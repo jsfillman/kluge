@@ -97,6 +97,96 @@ pub trait CheckClient {
     }
 }
 
+pub fn main_with(args: &[String], api: Option<&str>) -> (i32, String) {
+    match api {
+        Some(base) => main_api(args, base),
+        None => main_args(args),
+    }
+}
+
+fn main_api(args: &[String], base: &str) -> (i32, String) {
+    let verb = args.get(1).map(String::as_str).unwrap_or("");
+    match match_verb(verb) {
+        Match::One("run") => submit_api(args, base),
+        Match::One("status") => api_text(base, "GET", "/runs", ""),
+        Match::One("logs") => {
+            let Some(name) = args.get(2) else {
+                return (1, "logs needs a run".to_string());
+            };
+            api_text(base, "GET", &format!("/runs/{name}/logs"), "")
+        }
+        Match::One("cancel") => {
+            let Some(name) = args.get(2) else {
+                return (1, "cancel needs a run".to_string());
+            };
+            api_text(base, "DELETE", &format!("/runs/{name}"), "")
+        }
+        _ => main_args(args),
+    }
+}
+
+fn submit_api(args: &[String], base: &str) -> (i32, String) {
+    let local = local_diagnostics(args);
+    if local
+        .iter()
+        .any(|item| item.severity == kluge_check::Severity::Error)
+    {
+        return (1, local.iter().map(kluge_check::render).collect());
+    }
+    let spec = match parse_invocation(args) {
+        Ok(spec) => spec,
+        Err(err) => return (1, err),
+    };
+    let body = serde_json::to_string(&spec).unwrap_or_else(|_| "{}".to_string());
+    match api_call(base, "POST", "/runs", &body) {
+        Ok((200, response)) => {
+            let mut out = kluge_check::render_sentence(&spec);
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
+                if let Some(name) = value.get("name").and_then(|item| item.as_str()) {
+                    out.push_str(name);
+                    out.push('\n');
+                }
+            }
+            (0, out)
+        }
+        Ok((_status, response)) => (1, response),
+        Err(err) => (1, err),
+    }
+}
+
+fn api_text(base: &str, method: &str, path: &str, body: &str) -> (i32, String) {
+    match api_call(base, method, path, body) {
+        Ok((200, response)) => (0, response),
+        Ok((status, response)) => (1, format!("{status} {response}")),
+        Err(err) => (1, err),
+    }
+}
+
+fn api_call(base: &str, method: &str, path: &str, body: &str) -> Result<(u16, String), String> {
+    use std::io::{Read, Write};
+    let host = base.trim_start_matches("http://");
+    let mut stream = std::net::TcpStream::connect(host).map_err(|err| err.to_string())?;
+    let request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|err| err.to_string())?;
+    let mut buf = String::new();
+    stream
+        .read_to_string(&mut buf)
+        .map_err(|err| err.to_string())?;
+    let (head, response) = buf.split_once("\r\n\r\n").unwrap_or(("", &buf));
+    let status = head
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("0")
+        .parse()
+        .unwrap_or(0);
+    Ok((status, response.to_string()))
+}
+
 pub fn main_args(args: &[String]) -> (i32, String) {
     let verb = args.get(1).map(String::as_str).unwrap_or("");
     match match_verb(verb) {
