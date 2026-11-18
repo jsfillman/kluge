@@ -274,7 +274,11 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body.push_str(&format!("{i2}image: {image}\n"));
     body.push_str(&format!("{i2}workingDir: {dir}\n"));
     body.push_str(&format!("{i2}command:\n"));
-    if spec.script.is_some() {
+    if script_launch(spec) {
+        for arg in ["bash", "--noprofile", "--norc", "/kluge/launch"] {
+            body.push_str(&format!("{i2}- {arg}\n"));
+        }
+    } else if spec.script.is_some() {
         for arg in ["bash", "--noprofile", "--norc", "/kluge/script"] {
             body.push_str(&format!("{i2}- {arg}\n"));
         }
@@ -291,8 +295,8 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
         push_env(&mut body, &i2, &i4, key, value);
     }
     write_allocation_env(&mut body, &i2, &i4, spec, job, gpus);
-    if let Some(stdout) = &spec.stdout {
-        let expanded = expand_file(stdout, job, spec.across);
+    if let Some(pattern) = output_pattern(spec) {
+        let expanded = expand_file(&pattern, job, spec.across);
         let stderr = spec
             .stderr
             .as_deref()
@@ -303,6 +307,12 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     } else if let Some(stderr) = &spec.stderr {
         let expanded = expand_file(stderr, job, spec.across);
         push_env(&mut body, &i2, &i4, "KLUGE_STDERR", &expanded);
+    }
+    if let Some(sig) = &spec.signal {
+        let deadline = spec.duration.map(|d| d.as_secs()).unwrap_or(0);
+        let at = deadline.saturating_sub(spec.signal_lead);
+        push_env(&mut body, &i2, &i4, "KLUGE_SIGNAL", sig);
+        push_env(&mut body, &i2, &i4, "KLUGE_SIGNAL_AT", &at.to_string());
     }
     body.push_str(&format!("{i2}resources:\n"));
     body.push_str(&format!("{i4}requests:\n"));
@@ -355,10 +365,29 @@ fn pod_template(spec: &Spec, indent: usize) -> String {
     body
 }
 
+fn output_pattern(spec: &Spec) -> Option<String> {
+    if let Some(path) = &spec.stdout {
+        return Some(path.clone());
+    }
+    spec.into
+        .as_ref()
+        .map(|dir| format!("{dir}/%x-%j.out"))
+}
+
+fn script_launch(spec: &Spec) -> bool {
+    spec.script.is_some()
+        && (spec.across > 1 || output_pattern(spec).is_some() || spec.signal.is_some())
+}
+
 fn file_mounts(spec: &Spec) -> Vec<(&'static str, &'static str)> {
     let mut mounts = vec![("/kluge/hosts", "hosts")];
     if spec.script.is_some() {
         mounts.push(("/kluge/script", "script"));
+    }
+    if script_launch(spec) {
+        mounts.push(("/kluge/launch", "launch"));
+        mounts.push(("/kluge/wait", "wait"));
+        mounts.push(("/kluge/srun", "srun"));
     }
     mounts
 }
@@ -372,6 +401,14 @@ fn render_configmap(spec: &Spec) -> String {
         data.push_str("  script: ");
         data.push_str(&block_scalar(script));
     }
+    if script_launch(spec) {
+        data.push_str("  launch: ");
+        data.push_str(&block_scalar(LAUNCH));
+        data.push_str("  wait: ");
+        data.push_str(&block_scalar(WAIT));
+        data.push_str("  srun: ");
+        data.push_str(&block_scalar(SRUN));
+    }
     format!("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {name}-kluge\ndata:\n{data}")
 }
 
@@ -381,6 +418,41 @@ fn hosts_text(name: &str, across: u32) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+const LAUNCH: &str = r#"#!/bin/bash
+export PATH="/kluge:${PATH}"
+if [ -n "${KLUGE_STDOUT}" ]; then
+  mkdir -p "$(dirname "${KLUGE_STDOUT}")"
+  exec >>"${KLUGE_STDOUT}" 2>>"${KLUGE_STDERR:-${KLUGE_STDOUT}}"
+fi
+if [ "${RANK}" != "0" ]; then
+  exec /kluge/wait
+fi
+bash --noprofile --norc /kluge/script &
+child=$!
+if [ -n "${KLUGE_SIGNAL}" ]; then
+  (
+    sleep "${KLUGE_SIGNAL_AT}"
+    kill -s "${KLUGE_SIGNAL}" "${child}"
+  ) &
+fi
+wait "${child}"
+"#;
+
+const SRUN: &str = r#"#!/bin/bash
+dir="${SLURM_SUBMIT_DIR}/.kluge/${SLURM_JOB_NAME}"
+mkdir -p "${dir}"
+printf '%s\n' "$*" > "${dir}/srun"
+"#;
+
+const WAIT: &str = r#"#!/bin/bash
+dir="${SLURM_SUBMIT_DIR}/.kluge/${SLURM_JOB_NAME}"
+while [ ! -s "${dir}/srun" ]; do
+  sleep 1
+done
+line=$(cat "${dir}/srun")
+exec ${line}
+"#;
 
 fn block_scalar(body: &str) -> String {
     let mut out = String::from("|\n");
@@ -982,6 +1054,9 @@ pub fn read_sbatch(text: &str) -> Result<Spec, SbatchError> {
         script: None,
         stdout: None,
         stderr: None,
+        signal: None,
+        signal_lead: 0,
+        export_names: Vec::new(),
         overrides: Vec::new(),
     };
     let mut body = Vec::new();
@@ -1038,6 +1113,11 @@ fn apply_sbatch(spec: &mut Spec, line: usize, directive: &str) -> Result<(), Sba
         "--output" => spec.stdout = Some(value),
         "--error" => spec.stderr = Some(value),
         "--chdir" => spec.dir = Some(value),
+        "--signal" => {
+            let (sig, lead) = parse_signal(&value).ok_or_else(reject)?;
+            spec.signal = Some(sig);
+            spec.signal_lead = lead;
+        }
         "--export" => {
             if value.split(',').any(|name| name.trim() == "ALL") {
                 return Err(SbatchError {
@@ -1046,10 +1126,26 @@ fn apply_sbatch(spec: &mut Spec, line: usize, directive: &str) -> Result<(), Sba
                     message: "the container starts clean".to_string(),
                 });
             }
+            if value.trim() != "NONE" {
+                spec.export_names = value
+                    .split(',')
+                    .map(|name| name.trim().to_string())
+                    .filter(|name| !name.is_empty())
+                    .collect();
+            }
         }
         _ => return Err(reject()),
     }
     Ok(())
+}
+
+fn parse_signal(value: &str) -> Option<(String, u64)> {
+    let rest = value.strip_prefix("B:")?;
+    let (sig, seconds) = rest.split_once('@')?;
+    if sig.is_empty() || !sig.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some((sig.to_string(), seconds.parse().ok()?))
 }
 
 fn split_sbatch_flag(directive: &str) -> Option<(String, String)> {
@@ -1193,7 +1289,18 @@ pub struct Spec {
     pub script: Option<String>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
+    pub signal: Option<String>,
+    pub signal_lead: u64,
+    pub export_names: Vec<String>,
     pub overrides: Vec<OverrideNote>,
+}
+
+pub fn fill_export(spec: &mut Spec, env: &[(&str, &str)]) {
+    for name in &spec.export_names {
+        if let Some((_, value)) = env.iter().find(|(key, _)| key == name) {
+            spec.with.push((name.clone(), (*value).to_string()));
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1223,6 +1330,9 @@ pub fn resolve(
         script: None,
         stdout: None,
         stderr: None,
+        signal: None,
+        signal_lead: 0,
+        export_names: Vec::new(),
         overrides: Vec::new(),
     };
     let mut origin: Vec<(&'static str, Layer)> = Vec::new();
