@@ -378,7 +378,15 @@ fn parse_run(args: &[String]) -> Result<Spec, String> {
     let head = args.first().ok_or_else(|| "run is missing".to_string())?;
     if head.ends_with(".sbatch") {
         let text = std::fs::read_to_string(head).map_err(|err| err.to_string())?;
-        return read_sbatch(&text).map_err(|err| format!("{}: {}", err.line, err.text));
+        let mut spec = read_sbatch(&text).map_err(|err| format!("{}: {}", err.line, err.text))?;
+        if spec.dir.is_none() {
+            if let Some(parent) = std::path::Path::new(head).parent() {
+                if !parent.as_os_str().is_empty() {
+                    spec.dir = Some(parent.to_string_lossy().to_string());
+                }
+            }
+        }
+        return Ok(spec);
     }
     if head.ends_with(".kluge") {
         let text = std::fs::read_to_string(head).map_err(|err| err.to_string())?;
