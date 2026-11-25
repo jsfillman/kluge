@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kluge-controller
+  namespace: kluge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kluge-controller
+  template:
+    metadata:
+      labels:
+        app: kluge-controller
+    spec:
+      serviceAccountName: kluge-controller
+      tolerations:
+        - key: kluge.dev/pool
+          operator: Equal
+          value: reserved
+          effect: NoSchedule
+      containers:
+        - name: controller
+          image: kluge-controller:latest
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: https
+              containerPort: 8443
+          env:
+            - name: KLUGE_POOL_GPU
+              value: {{ .Values.pool.gpu | quote }}
+            - name: KLUGE_TEAM_ROOT
+              value: {{ .Values.team.root | quote }}
+            - name: KLUGE_TEAM_MAX_WALL
+              value: {{ .Values.team.maxWall | quote }}
+            - name: KLUGE_IMAGE_REQUIRE_DIGEST
+              value: {{ .Values.image.requireDigest | quote }}

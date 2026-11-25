@@ -1,0 +1,13 @@
+error[pool.shape]: each reserved node has 8 h100
+  --> ablation.kluge:2
+   |
+ 2 | on 32 h100
+   |    ^^^^^^^ no machine has this shape
+   |
+   = note: 32 GPUs is 4 machines of 8
+   |
+ 2 - on 32 h100
+ 2 + on 8 h100
+ 3 + across 4
+   |
+  kluge run --fix ablation.kluge

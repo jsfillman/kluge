@@ -1,0 +1,93 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ablation
+spec:
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: kluge
+        image: registry.example.com/train:latest
+        workingDir: /scratch/kernel-search
+        command:
+        - train.py
+        env:
+        - name: NCCL_DEBUG
+          value: INFO
+        - name: SLURM_JOB_ID
+          value: ablation
+        - name: SLURM_JOB_NAME
+          value: ablation
+        - name: SLURM_NNODES
+          value: 1
+        - name: SLURM_JOB_NUM_NODES
+          value: 1
+        - name: SLURM_NODEID
+          value: 0
+        - name: SLURM_PROCID
+          value: 0
+        - name: SLURM_LOCALID
+          value: 0
+        - name: SLURM_NTASKS
+          value: 1
+        - name: SLURM_CPUS_PER_TASK
+          value: 4
+        - name: SLURM_GPUS_ON_NODE
+          value: 8
+        - name: SLURM_SUBMIT_DIR
+          value: /scratch/kernel-search
+        - name: RANK
+          value: 0
+        - name: WORLD_SIZE
+          value: 1
+        - name: LOCAL_RANK
+          value: 0
+        - name: MASTER_ADDR
+          value: ablation-0
+        - name: MASTER_PORT
+          value: 29500
+        resources:
+          requests:
+            cpu: "4"
+            memory: 16G
+            nvidia.com/gpu: "8"
+          limits:
+            cpu: "4"
+            memory: 16G
+            nvidia.com/gpu: "8"
+        volumeMounts:
+        - name: team
+          mountPath: /scratch/kernel-search
+        - name: dshm
+          mountPath: /dev/shm
+        - name: kluge-files
+          mountPath: /kluge/hosts
+          subPath: hosts
+      nodeSelector:
+        kluge.dev/gpu: h100
+      tolerations:
+      - key: kluge.dev/pool
+        operator: Equal
+        value: reserved
+        effect: NoSchedule
+      volumes:
+      - name: team
+        persistentVolumeClaim:
+          claimName: team
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 8Gi
+      - name: kluge-files
+        configMap:
+          name: ablation-kluge
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ablation-kluge
+data:
+  hosts: |
+    ablation-0

@@ -1,0 +1,7 @@
+name ablation-17
+on 8 h100
+across 4
+for 6 hours
+into results
+with NCCL_DEBUG=INFO
+run torchrun train.py --epochs 10

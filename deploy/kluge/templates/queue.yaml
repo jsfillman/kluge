@@ -1,0 +1,34 @@
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: kluge-reserved
+spec:
+  nodeLabels:
+    kluge.dev/gpu: {{ .Values.pool.gpu | quote }}
+  tolerations:
+    - key: kluge.dev/pool
+      operator: Equal
+      value: reserved
+      effect: NoSchedule
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: kluge
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["nvidia.com/gpu"]
+      flavors:
+        - name: kluge-reserved
+          resources:
+            - name: nvidia.com/gpu
+              nominalQuota: {{ .Values.team.maxGpus }}
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: kluge
+  namespace: kluge
+spec:
+  clusterQueue: kluge
