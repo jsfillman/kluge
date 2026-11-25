@@ -57,7 +57,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E14-T2](E14-T2.md) | done | E14-T1 | macOS status item |
 | [E15-T1](E15-T1.md) | done | E13-T2, E5-T1 | The pool from node and pod lists |
 | [E15-T2](E15-T2.md) | done | E15-T1, E13-T3 | Webhook certificate |
-| [E15-T3](E15-T3.md) | open | E15-T1, E13-T2 | Poll nodes and runs |
+| [E15-T3](E15-T3.md) | done | E15-T1, E13-T2 | Poll nodes and runs |
 
 ## Epics
 

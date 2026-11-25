@@ -113,6 +113,39 @@ impl HttpCluster {
     }
 }
 
+pub fn poll_once(base: &str, state: &mut State) -> Result<(), String> {
+    let nodes = http_get(base, "/api/v1/nodes")?;
+    let pods = http_get(base, "/api/v1/pods")?;
+    let runs = http_get(base, "/apis/kluge.dev/v1/namespaces/kluge/runs")?;
+    apply_pool(state, &nodes, &pods)?;
+    let list: serde_json::Value = serde_json::from_str(&runs).map_err(|err| err.to_string())?;
+    for item in list
+        .get("items")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+    {
+        let Some(text) = item.pointer("/spec/text").and_then(|value| value.as_str()) else {
+            continue;
+        };
+        let Ok(phrases) = kluge_check::lex(text) else {
+            continue;
+        };
+        let Ok(spec) = kluge_check::resolve(&[], &phrases, &[]) else {
+            continue;
+        };
+        let run = Run {
+            spec,
+            view: state.context.view.clone(),
+            nodes: state.context.nodes.clone(),
+            quota: state.context.quota,
+            fs: state.context.fs.clone(),
+        };
+        let _ = sync(&run, &mut state.cluster);
+    }
+    Ok(())
+}
+
 pub fn apply_pool(state: &mut State, node_list: &str, pod_list: &str) -> Result<(), String> {
     state.context.nodes = kluge_check::nodes_from(node_list, pod_list)?;
     Ok(())
@@ -403,6 +436,21 @@ fn post_run(body: &str, state: &mut State) -> (u16, String) {
         });
     }
     (200, serde_json::json!({ "name": name }).to_string())
+}
+
+fn http_get(base: &str, path: &str) -> Result<String, String> {
+    let host = base.trim_start_matches("http://");
+    let mut stream = std::net::TcpStream::connect(host).map_err(|err| err.to_string())?;
+    let request = format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+    std::io::Write::write_all(&mut stream, request.as_bytes()).map_err(|err| err.to_string())?;
+    let mut buf = String::new();
+    stream
+        .read_to_string(&mut buf)
+        .map_err(|err| err.to_string())?;
+    Ok(buf
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_string())
+        .unwrap_or_default())
 }
 
 fn post_text(base: &str, path: &str, body: &str) -> Result<(), String> {

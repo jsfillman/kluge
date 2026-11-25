@@ -50,6 +50,15 @@ fn main() {
     let handle = open_on(&bind, context).expect("listen");
     if let Ok(base) = std::env::var("KLUGE_APISERVER") {
         handle.state.lock().expect("state").apiserver = Some(base);
+        let state = std::sync::Arc::clone(&handle.state);
+        std::thread::spawn(move || loop {
+            let base = state.lock().expect("state").apiserver.clone();
+            if let Some(base) = base {
+                let mut guard = state.lock().expect("state");
+                let _ = kluge_controller::poll_once(&base, &mut guard);
+            }
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        });
     }
     println!("{}", handle.addr);
     std::thread::park();
