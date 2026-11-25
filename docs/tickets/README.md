@@ -2,7 +2,7 @@
 
 Do the current ticket and stop. [AGENTS.md](../../AGENTS.md) is the process. The specs in `docs/spec/` are the behavior.
 
-The current ticket is the first row that is `open`, whose dependencies are all `done`, and that is not blocked.
+The current ticket is the first row that is `open`, whose dependencies are all `done`, and that is not blocked. A row marked `later` is planned and is not current.
 
 | Id | Status | Depends | Title |
 | --- | --- | --- | --- |
@@ -60,6 +60,28 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E15-T3](E15-T3.md) | done | E15-T1, E13-T2 | Poll nodes and runs |
 | [E16-T1](E16-T1.md) | done | E15-T2, E13-T1 | Admit over TLS |
 | [E16-T2](E16-T2.md) | done | E15-T3, E13-T2 | A polled run is posted |
+| [E17-T1](E17-T1.md) | open | E16-T2 | Status table |
+| [E17-T2](E17-T2.md) | open | E17-T1 | Log stream |
+| [E17-T3](E17-T3.md) | open | E15-T1 | GPU prefix |
+| [E17-T4](E17-T4.md) | open | E3-T3, E17-T3 | Completion |
+| [E17-T5](E17-T5.md) | open | E4-T3, E7-T1 | Kueue queue |
+| [E17-T6](E17-T6.md) | open | E5-T1, E7-T1 | Quota from the chart |
+| [E17-T7](E17-T7.md) | open | E5-T2 | Directories on disk |
+| [E17-T8](E17-T8.md) | open | E12-T5, E13-T4 | Export values |
+| [E18-T1](E18-T1.md) | open | E17-T1, E9-T1 | Watch frame |
+| [E18-T2](E18-T2.md) | open | E18-T1, E9-T2, E9-T3, E13-T4 | Explain, debug, and attach on the API |
+| [E18-T3](E18-T3.md) | open | E18-T2 | Pending reasons |
+| [E19-T1](E19-T1.md) | open | E10-T1 | Classify a path |
+| [E19-T2](E19-T2.md) | open | E19-T1 | Chunk cache |
+| [E19-T3](E19-T3.md) | open | E19-T1 | Object store |
+| [E19-T4](E19-T4.md) | open | E19-T2, E19-T3 | Publish the hybrid manifest |
+| [E19-T5](E19-T5.md) | open | E19-T4, E17-T1 | `outputs` and `fetch` |
+| [E19-T6](E19-T6.md) | open | E19-T2 | The working directory |
+| [E19-T7](E19-T7.md) | blocked-on-display | E19-T6 | Mount |
+| [E20-T1](E20-T1.md) | later | E8-T3 | Borrow idle Slinky nodes |
+| [E20-T2](E20-T2.md) | later | E17-T1, E8-T3 | A failed machine is not a result |
+| [E20-T3](E20-T3.md) | later | E1-T6 | Arrays and dependencies |
+| [E20-T4](E20-T4.md) | later | E13-T4 | An agent API beyond `--json` |
 
 ## Epics
 
@@ -82,3 +104,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E14 Menu bar](epics/E14.md) | E14-T1, E14-T2 | Layout and the Mac shell. E10-T3 stays blocked |
 | [E15 The controller reads](epics/E15.md) | E15-T1 … E15-T3 | Recorded node lists and a localhost API. E8-T3 stays blocked |
 | [E16 Close the loop](epics/E16.md) | E16-T1, E16-T2 | TLS admit and posting a polled Run. E8-T3 stays blocked |
+| [E17 The daily record](epics/E17.md) | E17-T1 … E17-T8 | Status, logs, prefix, completion, Kueue, quota, directories, export |
+| [E18 The rest of the verbs](epics/E18.md) | E18-T1 … E18-T3 | Watch frame, API verbs, pending reasons |
+| [E19 Artifact storage](epics/E19.md) | E19-T1 … E19-T7 | Cache, objects, hybrid. The mount stays blocked |
+| [E20 Later](epics/E20.md) | E20-T1 … E20-T4 | Planned. Not current |

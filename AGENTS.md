@@ -4,7 +4,7 @@ This file is the process. The specs in `docs/spec/` are the product. The tickets
 
 ## What you may do
 
-Take the single ticket named by `docs/tickets/README.md` as the current ticket. It is the lowest-numbered open ticket whose dependencies are `done` and whose status is not `blocked-on-cluster` or `blocked-on-display`.
+Take the single ticket named by `docs/tickets/README.md` as the current ticket. It is the first `open` ticket whose dependencies are `done` and whose status is not `blocked-on-cluster`, `blocked-on-display`, or `later`. A `later` ticket is planned and is not current.
 
 Finish that ticket in one change:
 
