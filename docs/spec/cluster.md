@@ -133,9 +133,9 @@ A `Run` object's `spec.text` is the sentence. The CRD has no other spec fields, 
 
 `sync` turns each admitted `Run` into the rendered YAML and asks a `Cluster` to create it. Tests use the in-memory `Cluster`. `KLUGE_APISERVER` selects the HTTP `Cluster`, which POSTs each document to the Kubernetes API. The tests do not start an apiserver; they record the request.
 
-The same address is polled. Each poll GETs `/api/v1/nodes`, `/api/v1/pods`, and `/apis/kluge.dev/v1/namespaces/kluge/runs`. The node and pod lists replace the pool through `nodes_from`. Each Run's `spec.text` is admitted and synced once. A recorded server is enough for the test. That poll does not close the one-real-GPU ticket.
+The same address is polled. Each poll GETs `/api/v1/nodes`, `/api/v1/pods`, and `/apis/kluge.dev/v1/namespaces/kluge/runs`. The node and pod lists replace the pool through `nodes_from`. Each Run's `spec.text` is admitted and synced once. When `KLUGE_APISERVER` is set, that sync also posts the rendered documents and stores the run name. A second poll does not post again. A recorded server is enough for the test. That poll does not close the one-real-GPU ticket.
 
-The webhook listens on HTTPS port 8443. The controller mints a CA and a certificate whose names are `kluge-controller.kluge.svc` and `localhost`. The CA PEM, base64-encoded with no newlines, is `webhook.caBundle`. A client that trusts that CA can complete a handshake with the listener. No cluster is required for that test.
+The webhook listens on HTTPS port 8443. The controller mints a CA and a certificate whose names are `kluge-controller.kluge.svc` and `localhost`. The CA PEM, base64-encoded with no newlines, is `webhook.caBundle`. `POST /admit` on that listener is the same admission function as the plain HTTP route. The process prints the bundle, then the listen address. No cluster is required for that test.
 
 Ctrl-C during `logs` stops the stream and does not call cancel. `kluge completion install` writes `~/.kluge/completion.bash`, `~/.kluge/completion.zsh`, and `~/.kluge/completion.fish`.
 
