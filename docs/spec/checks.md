@@ -96,6 +96,8 @@ The controller knows the pool. It repeats anything that must hold even if the cl
 
 **Machines.** The GPU type exists on the reserved pool. The count matches a real machine. Enough healthy nodes exist for an eventual admit. Health here means the node is untainted except for the Kluge taint, is not cordoned, and reports the GPUs as allocatable. A shortfall against free nodes is a note. A shortfall against existing nodes is `pool.shape` or `pool.capacity`.
 
+The controller reads that pool from the API's node list and pod list. A node is in the pool only when it has taint `kluge.dev/pool=reserved:NoSchedule`, label `kluge.dev/gpu=<type>`, and a non-zero `status.allocatable["nvidia.com/gpu"]`. It is healthy when it is not cordoned and it has no other taint. It is free when it is healthy and no Pending or Running pod on that node requests `nvidia.com/gpu`. Every other node is ignored. `nodes_from` turns those two JSON lists into the `NodeFact` values the checks already use. An empty list is what the process starts with, and a GPU sentence against it is `pool.type`.
+
 **Files.** `dir` and `into` resolve, after symlinks, to paths inside the team's configured root. The directory exists and the user can write it. `..` does not escape.
 
 **Image.** The reference is in the admin allowlist. The nodes can pull it. A floating tag is a warning unless the admin set `requireDigest`.
