@@ -1,5 +1,5 @@
 use kluge_check::{AdmitView, Diagnostic, FsView, NodeFact, Spec};
-use std::io::Read;
+use std::io::{Read, Write};
 
 pub struct Run {
     pub spec: Spec,
@@ -171,6 +171,159 @@ pub fn open_on(bind: &str, context: Run) -> std::io::Result<Handle> {
         }
     });
     Ok(Handle { addr, state })
+}
+
+pub struct WebhookMaterial {
+    pub ca_pem: String,
+    pub cert_pem: String,
+    pub key_pem: String,
+    pub ca_bundle: String,
+}
+
+fn install_crypto() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+pub fn mint_webhook() -> WebhookMaterial {
+    install_crypto();
+    let mut ca_params = rcgen::CertificateParams::new(Vec::new()).expect("ca params");
+    ca_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+    ca_params.distinguished_name = rcgen::DistinguishedName::new();
+    ca_params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, "kluge-ca");
+    let ca_key = rcgen::KeyPair::generate().expect("ca key");
+    let ca_cert = ca_params.self_signed(&ca_key).expect("ca cert");
+    let mut params = rcgen::CertificateParams::new(vec![
+        "kluge-controller.kluge.svc".to_string(),
+        "localhost".to_string(),
+    ])
+    .expect("server params");
+    params.distinguished_name = rcgen::DistinguishedName::new();
+    params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, "kluge-controller");
+    let key = rcgen::KeyPair::generate().expect("server key");
+    let cert = params.signed_by(&key, &ca_cert, &ca_key).expect("server cert");
+    let ca_pem = ca_cert.pem();
+    WebhookMaterial {
+        ca_bundle: base64_encode(ca_pem.as_bytes()),
+        ca_pem,
+        cert_pem: cert.pem(),
+        key_pem: key.serialize_pem(),
+    }
+}
+
+pub fn open_tls(bind: &str, material: &WebhookMaterial) -> std::io::Result<std::net::SocketAddr> {
+    install_crypto();
+    let cert = rustls::pki_types::CertificateDer::from(pem_bytes(&material.cert_pem));
+    let key = rustls::pki_types::PrivateKeyDer::Pkcs8(
+        rustls::pki_types::PrivatePkcs8KeyDer::from(pem_bytes(&material.key_pem)),
+    );
+    let config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert], key)
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    let listener = std::net::TcpListener::bind(bind)?;
+    let addr = listener.local_addr()?;
+    let config = std::sync::Arc::new(config);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut tcp) = stream else { continue };
+            let config = std::sync::Arc::clone(&config);
+            let _ = std::thread::spawn(move || {
+                let Ok(mut connection) = rustls::ServerConnection::new(config) else {
+                    return;
+                };
+                let mut tls = rustls::Stream::new(&mut connection, &mut tcp);
+                let mut buf = [0u8; 1024];
+                let _ = tls.read(&mut buf);
+                let body = "ok";
+                let raw = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = tls.write_all(raw.as_bytes());
+            });
+        }
+    });
+    Ok(addr)
+}
+
+fn pem_bytes(pem: &str) -> Vec<u8> {
+    let body: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    base64_decode(&body).unwrap_or_default()
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    let mut index = 0;
+    while index + 3 <= data.len() {
+        let n = ((data[index] as u32) << 16)
+            | ((data[index + 1] as u32) << 8)
+            | data[index + 2] as u32;
+        for shift in [18, 12, 6, 0] {
+            out.push(TABLE[((n >> shift) & 63) as usize] as char);
+        }
+        index += 3;
+    }
+    if index < data.len() {
+        let rest = data.len() - index;
+        let n = if rest == 1 {
+            (data[index] as u32) << 16
+        } else {
+            ((data[index] as u32) << 16) | ((data[index + 1] as u32) << 8)
+        };
+        out.push(TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        if rest == 1 {
+            out.push('=');
+            out.push('=');
+        } else {
+            out.push(TABLE[((n >> 6) & 63) as usize] as char);
+            out.push('=');
+        }
+    }
+    out
+}
+
+fn base64_decode(text: &str) -> Result<Vec<u8>, ()> {
+    fn val(byte: u8) -> Result<u8, ()> {
+        match byte {
+            b'A'..=b'Z' => Ok(byte - b'A'),
+            b'a'..=b'z' => Ok(byte - b'a' + 26),
+            b'0'..=b'9' => Ok(byte - b'0' + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            _ => Err(()),
+        }
+    }
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut index = 0;
+    while index + 4 <= bytes.len() {
+        let (a, b, c, d) = (
+            bytes[index],
+            bytes[index + 1],
+            bytes[index + 2],
+            bytes[index + 3],
+        );
+        let (a, b) = (val(a)?, val(b)?);
+        out.push((a << 2) | (b >> 4));
+        if c != b'=' {
+            let c = val(c)?;
+            out.push((b << 4) | (c >> 2));
+            if d != b'=' {
+                out.push((c << 6) | val(d)?);
+            }
+        }
+        index += 4;
+    }
+    Ok(out)
 }
 
 pub fn serve(context: Run) -> std::io::Result<std::net::SocketAddr> {

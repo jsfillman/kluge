@@ -25,6 +25,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: https
+              containerPort: 8443
           env:
             - name: KLUGE_POOL_GPU
               value: {{ .Values.pool.gpu | quote }}
