@@ -134,6 +134,7 @@ pub fn poll_once(base: &str, state: &mut State) -> Result<(), String> {
         let Ok(spec) = kluge_check::resolve(&[], &phrases, &[]) else {
             continue;
         };
+        let name = spec.name.clone().unwrap_or_else(|| "kluge".to_string());
         let run = Run {
             spec,
             view: state.context.view.clone(),
@@ -141,7 +142,21 @@ pub fn poll_once(base: &str, state: &mut State) -> Result<(), String> {
             quota: state.context.quota,
             fs: state.context.fs.clone(),
         };
-        let _ = sync(&run, &mut state.cluster);
+        let before = state.cluster.created.len();
+        if sync(&run, &mut state.cluster) && state.cluster.created.len() > before {
+            let yaml = state.cluster.created.last().cloned().unwrap_or_default();
+            if let Some(base) = state.apiserver.clone() {
+                let _ = HttpCluster { base }.create(&yaml);
+            }
+            if !state.runs.iter().any(|item| item.name == name) {
+                state.runs.push(StoredRun {
+                    name,
+                    yaml,
+                    log: String::new(),
+                    deleted: false,
+                });
+            }
+        }
     }
     Ok(())
 }

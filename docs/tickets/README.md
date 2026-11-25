@@ -59,7 +59,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E15-T2](E15-T2.md) | done | E15-T1, E13-T3 | Webhook certificate |
 | [E15-T3](E15-T3.md) | done | E15-T1, E13-T2 | Poll nodes and runs |
 | [E16-T1](E16-T1.md) | done | E15-T2, E13-T1 | Admit over TLS |
-| [E16-T2](E16-T2.md) | open | E15-T3, E13-T2 | A polled run is posted |
+| [E16-T2](E16-T2.md) | done | E15-T3, E13-T2 | A polled run is posted |
 
 ## Epics
 
