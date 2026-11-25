@@ -151,12 +151,124 @@ fn within_root(path: &str, root: &str) -> bool {
     path == root || path.starts_with(&format!("{root}/"))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeFact {
     pub kind: String,
     pub gpus: u32,
     pub healthy: bool,
     pub free: bool,
+}
+
+pub fn nodes_from(node_list: &str, pod_list: &str) -> Result<Vec<NodeFact>, String> {
+    let nodes: serde_json::Value = serde_json::from_str(node_list).map_err(|err| err.to_string())?;
+    let pods: serde_json::Value = serde_json::from_str(pod_list).map_err(|err| err.to_string())?;
+    let occupied = occupied_nodes(&pods);
+    let mut facts = Vec::new();
+    for node in nodes
+        .get("items")
+        .and_then(|item| item.as_array())
+        .into_iter()
+        .flatten()
+    {
+        if let Some(fact) = node_fact(node, &occupied) {
+            facts.push(fact);
+        }
+    }
+    Ok(facts)
+}
+
+fn occupied_nodes(pods: &serde_json::Value) -> std::collections::BTreeSet<String> {
+    let mut names = std::collections::BTreeSet::new();
+    for pod in pods
+        .get("items")
+        .and_then(|item| item.as_array())
+        .into_iter()
+        .flatten()
+    {
+        let phase = pod
+            .pointer("/status/phase")
+            .and_then(|item| item.as_str())
+            .unwrap_or("");
+        if phase != "Pending" && phase != "Running" {
+            continue;
+        }
+        let Some(node) = pod.pointer("/spec/nodeName").and_then(|item| item.as_str()) else {
+            continue;
+        };
+        let requests = pod
+            .pointer("/spec/containers")
+            .and_then(|item| item.as_array())
+            .into_iter()
+            .flatten()
+            .any(|container| {
+                container
+                    .pointer("/resources/requests")
+                    .and_then(|item| item.get("nvidia.com/gpu"))
+                    .and_then(|item| item.as_str())
+                    .is_some_and(|count| count != "0")
+            });
+        if requests {
+            names.insert(node.to_string());
+        }
+    }
+    names
+}
+
+fn node_fact(node: &serde_json::Value, occupied: &std::collections::BTreeSet<String>) -> Option<NodeFact> {
+    let taints = node
+        .pointer("/spec/taints")
+        .and_then(|item| item.as_array())?;
+    let kluge = taints.iter().any(|taint| {
+        taint.get("key").and_then(|item| item.as_str()) == Some("kluge.dev/pool")
+            && taint.get("value").and_then(|item| item.as_str()) == Some("reserved")
+            && taint.get("effect").and_then(|item| item.as_str()) == Some("NoSchedule")
+    });
+    if !kluge {
+        return None;
+    }
+    let kind = node
+        .pointer("/metadata/labels/kluge.dev~1gpu")
+        .and_then(|item| item.as_str())
+        .or_else(|| {
+            node.pointer("/metadata/labels")
+                .and_then(|item| item.get("kluge.dev/gpu"))
+                .and_then(|item| item.as_str())
+        })?
+        .to_string();
+    let gpus = node
+        .pointer("/status/allocatable/nvidia.com~1gpu")
+        .and_then(|item| item.as_str())
+        .or_else(|| {
+            node.pointer("/status/allocatable")
+                .and_then(|item| item.get("nvidia.com/gpu"))
+                .and_then(|item| item.as_str())
+        })?
+        .parse()
+        .ok()?;
+    if gpus == 0 || kind.is_empty() {
+        return None;
+    }
+    let extra = taints.iter().any(|taint| {
+        !(taint.get("key").and_then(|item| item.as_str()) == Some("kluge.dev/pool")
+            && taint.get("value").and_then(|item| item.as_str()) == Some("reserved")
+            && taint.get("effect").and_then(|item| item.as_str()) == Some("NoSchedule"))
+    });
+    let cordoned = node
+        .pointer("/spec/unschedulable")
+        .and_then(|item| item.as_bool())
+        .unwrap_or(false);
+    let healthy = !extra && !cordoned;
+    let name = node
+        .pointer("/metadata/name")
+        .and_then(|item| item.as_str())
+        .unwrap_or("");
+    let free = healthy && !occupied.contains(name);
+    Some(NodeFact {
+        kind,
+        gpus,
+        healthy,
+        free,
+    })
 }
 
 pub fn check_pool(spec: &Spec, nodes: &[NodeFact], quota: u32) -> Vec<Diagnostic> {

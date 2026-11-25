@@ -113,6 +113,11 @@ impl HttpCluster {
     }
 }
 
+pub fn apply_pool(state: &mut State, node_list: &str, pod_list: &str) -> Result<(), String> {
+    state.context.nodes = kluge_check::nodes_from(node_list, pod_list)?;
+    Ok(())
+}
+
 pub fn sync(run: &Run, cluster: &mut MemoryCluster) -> bool {
     if !admit(run).accepted {
         return false;

@@ -55,7 +55,7 @@ The current ticket is the first row that is `open`, whose dependencies are all `
 | [E13-T5](E13-T5.md) | done | E13-T4, E3-T3, E8-T2 | Completion install and Ctrl-C |
 | [E14-T1](E14-T1.md) | done | E10-T2 | Menu layout |
 | [E14-T2](E14-T2.md) | done | E14-T1 | macOS status item |
-| [E15-T1](E15-T1.md) | open | E13-T2, E5-T1 | The pool from node and pod lists |
+| [E15-T1](E15-T1.md) | done | E13-T2, E5-T1 | The pool from node and pod lists |
 | [E15-T2](E15-T2.md) | open | E15-T1, E13-T3 | Webhook certificate |
 | [E15-T3](E15-T3.md) | open | E15-T1, E13-T2 | Poll nodes and runs |
 

@@ -20,6 +20,14 @@ fn main() {
         .collect();
     let spec = resolve(&[], &lex("run kluge\nfor 1h\n").expect("context"), &[])
         .expect("context");
+    let nodes = match (std::env::var("KLUGE_NODES"), std::env::var("KLUGE_PODS")) {
+        (Ok(node_path), Ok(pod_path)) => {
+            let node_list = std::fs::read_to_string(node_path).unwrap_or_else(|_| "{\"items\":[]}".into());
+            let pod_list = std::fs::read_to_string(pod_path).unwrap_or_else(|_| "{\"items\":[]}".into());
+            kluge_check::nodes_from(&node_list, &pod_list).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
     let context = Run {
         spec,
         view: AdmitView {
@@ -31,7 +39,7 @@ fn main() {
             caller: Some("kluge".to_string()),
             max_wall_secs: wall_seconds(&wall),
         },
-        nodes: Vec::new(),
+        nodes,
         quota: u32::MAX,
         fs: FsView {
             root: root.clone(),
