@@ -247,7 +247,11 @@ pub fn mint_webhook() -> WebhookMaterial {
     }
 }
 
-pub fn open_tls(bind: &str, material: &WebhookMaterial) -> std::io::Result<std::net::SocketAddr> {
+pub fn open_tls(
+    bind: &str,
+    material: &WebhookMaterial,
+    state: std::sync::Arc<std::sync::Mutex<State>>,
+) -> std::io::Result<std::net::SocketAddr> {
     install_crypto();
     let cert = rustls::pki_types::CertificateDer::from(pem_bytes(&material.cert_pem));
     let key = rustls::pki_types::PrivateKeyDer::Pkcs8(
@@ -264,19 +268,22 @@ pub fn open_tls(bind: &str, material: &WebhookMaterial) -> std::io::Result<std::
         for stream in listener.incoming() {
             let Ok(mut tcp) = stream else { continue };
             let config = std::sync::Arc::clone(&config);
+            let state = std::sync::Arc::clone(&state);
             let _ = std::thread::spawn(move || {
+                let _ = tcp.set_read_timeout(Some(std::time::Duration::from_secs(2)));
                 let Ok(mut connection) = rustls::ServerConnection::new(config) else {
                     return;
                 };
                 let mut tls = rustls::Stream::new(&mut connection, &mut tcp);
-                let mut buf = [0u8; 1024];
-                let _ = tls.read(&mut buf);
-                let body = "ok";
-                let raw = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
-                let _ = tls.write_all(raw.as_bytes());
+                if let Some((method, path, body)) = read_message(&mut tls) {
+                    let (status, response) = dispatch(&method, &path, &body, &state);
+                    let reason = if status == 200 { "OK" } else { "Bad Request" };
+                    let raw = format!(
+                        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+                        response.len()
+                    );
+                    let _ = tls.write_all(raw.as_bytes());
+                }
             });
         }
     });
@@ -518,6 +525,10 @@ fn read_http(stream: &mut std::net::TcpStream) -> Option<(String, String, String
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(2)))
         .ok()?;
+    read_message(stream)
+}
+
+fn read_message(stream: &mut impl Read) -> Option<(String, String, String)> {
     let mut buf = Vec::new();
     let mut tmp = [0u8; 8192];
     let mut header_end = None;

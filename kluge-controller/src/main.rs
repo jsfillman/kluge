@@ -1,5 +1,5 @@
 use kluge_check::{lex, resolve, AdmitView, FsView};
-use kluge_controller::{open_on, Run};
+use kluge_controller::{mint_webhook, open_on, open_tls, Run};
 
 fn main() {
     let bind = std::env::var("KLUGE_LISTEN").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
@@ -47,7 +47,11 @@ fn main() {
             links: Vec::new(),
         },
     };
+    let material = mint_webhook();
+    println!("{}", material.ca_bundle);
     let handle = open_on(&bind, context).expect("listen");
+    let webhook = std::env::var("KLUGE_WEBHOOK_LISTEN").unwrap_or_else(|_| "0.0.0.0:8443".to_string());
+    open_tls(&webhook, &material, std::sync::Arc::clone(&handle.state)).expect("webhook");
     if let Ok(base) = std::env::var("KLUGE_APISERVER") {
         handle.state.lock().expect("state").apiserver = Some(base);
         let state = std::sync::Arc::clone(&handle.state);

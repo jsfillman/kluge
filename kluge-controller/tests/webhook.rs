@@ -1,4 +1,5 @@
-use kluge_controller::mint_webhook;
+use kluge_check::{lex, resolve, AdmitView, FsView};
+use kluge_controller::{mint_webhook, Run, State};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -19,7 +20,7 @@ fn bundle_is_the_ca_and_the_listener_handshakes() {
     ))
     .unwrap();
     assert!(service.contains("8443"), "{service}");
-    let addr = kluge_controller::open_tls("127.0.0.1:0", &material).unwrap();
+    let addr = kluge_controller::open_tls("127.0.0.1:0", &material, webhook_state()).unwrap();
     let mut root_store = rustls::RootCertStore::empty();
     for cert in rustls_pemfile::certs(&mut material.ca_pem.as_bytes()) {
         root_store.add(cert.unwrap()).unwrap();
@@ -39,6 +40,33 @@ fn bundle_is_the_ca_and_the_listener_handshakes() {
     let mut buf = [0u8; 64];
     let n = tls.read(&mut buf).unwrap_or(0);
     assert!(n > 0 || connection.peer_certificates().is_some());
+}
+
+fn webhook_state() -> std::sync::Arc<std::sync::Mutex<State>> {
+    std::sync::Arc::new(std::sync::Mutex::new(State {
+        context: Run {
+            spec: resolve(&[], &lex("run t\nfor 1h\n").unwrap(), &[]).unwrap(),
+            view: AdmitView {
+                allow: Vec::new(),
+                require_digest: false,
+                pull_ok: true,
+                live_names: Vec::new(),
+                teams: Vec::new(),
+                caller: Some("ada".to_string()),
+                max_wall_secs: 3600,
+            },
+            nodes: Vec::new(),
+            quota: 1,
+            fs: FsView {
+                root: "/".to_string(),
+                existing: vec!["/".to_string()],
+                links: Vec::new(),
+            },
+        },
+        runs: Vec::new(),
+        cluster: kluge_controller::MemoryCluster::default(),
+        apiserver: None,
+    }))
 }
 
 fn decode_base64(text: &str) -> Result<Vec<u8>, ()> {
